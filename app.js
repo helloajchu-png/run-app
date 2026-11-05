@@ -26,7 +26,7 @@ $('#cancelEdit').onclick=resetForm;
 function editRun(id){const r=runs.find(x=>x.id===id);if(!r)return;$('#editId').value=r.id;$('#fDate').value=r.date;$('#fDist').value=r.distanceKm;$('#fTime').value=fmtT(r.durationSec);$('#fHr').value=r.avgHr||'';$('#fNote').value=r.note||'';$('#formTitle').textContent='編輯跑步';$('#cancelEdit').hidden=false;updPace();scrollTo({top:0,behavior:'smooth'})}
 function delRun(id){if(confirm('確定刪除這筆紀錄？')){runs=runs.filter(x=>x.id!==id);save()}}
 function renderLog(){runs.sort((a,b)=>b.date.localeCompare(a.date));$('#runCount').textContent=`（${runs.length} 筆）`;
- $('#runList').innerHTML=runs.length?runs.map(r=>`<li><div><b>${r.date}</b>　${r.distanceKm.toFixed(2)} km　${fmtT(r.durationSec)}<div class="meta">配速 ${fmtP(r.durationSec/r.distanceKm)}${r.avgHr?'　心率 '+r.avgHr:''}${r.source&&r.source!=='manual'?'　📥Garmin':''}${r.note?'　'+esc(r.note):''}</div></div><div class="row" style="flex:0 0 auto"><button class="ghost" data-e="${r.id}">編輯</button><button class="danger" data-d="${r.id}">刪除</button></div></li>`).join(''):'<li class="muted">尚無紀錄</li>';
+ $('#runList').innerHTML=runs.length?runs.map(r=>`<li><div class="run-body"><div class="run-top"><b>${r.date}</b><span class="run-fig">${r.distanceKm.toFixed(2)}</span><span class="unit">km</span><span class="run-time">${fmtT(r.durationSec)}</span></div><div class="meta">配速 ${fmtP(r.durationSec/r.distanceKm)}${r.avgHr?' · 心率 '+r.avgHr:''}${r.source&&r.source!=='manual'?' <span class="src">GARMIN</span>':''}${r.note?' · '+esc(r.note):''}</div></div><div class="acts"><button class="ghost" data-e="${r.id}">編輯</button><button class="danger" data-d="${r.id}">刪除</button></div></li>`).join(''):'<li class="muted">尚無紀錄</li>';
  $('#runList').querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>editRun(b.dataset.e));$('#runList').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>delRun(b.dataset.d))}
 $('#garminFile').onchange=async e=>{const files=[...e.target.files];if(!files.length)return;$('#importMsg').textContent='解析中…';
  try{const inc=await GarminImport.parseFiles(files);inc.forEach((r,i)=>{r.id='g'+Date.now()+'_'+i;r.note=r.note||''});
@@ -76,9 +76,9 @@ const TAG={easy:['輕鬆','t-easy'],long:['長跑','t-long'],tempo:['節奏','t-
 function renderPlan(){const g=S.get('goal',null);if(!g){$('#gDate').value='';return}
  $('#gDist').value=String(g.dist);$('#gDate').value=g.date;$('#gTime').value=fmtT(g.sec);$('#gDays').value=g.days;
  const p=genPlan(g);const pred=vdotTime(p.V,g.dist);const gap=pred-g.sec;
- $('#planOut').innerHTML=`<div class="card"><p>距離比賽 <b>${p.weeks}</b> 週。目前預測 ${fmtT(pred)}（VDOT ${p.V.toFixed(1)}），目標需 VDOT ${p.gV.toFixed(1)}。${gap>0?`<br>還差約 ${fmtT(gap)}，${p.gV-p.V>3?'目標偏積極，建議穩定累積里程。':'持續訓練有機會達成！'}`:'<br>目前體能已達目標，維持即可 👍'}</p>
+ $('#planOut').innerHTML=`<div class="card"><p>距離比賽 <b>${p.weeks}</b> 週。目前預測 ${fmtT(pred)}（VDOT ${p.V.toFixed(1)}），目標需 VDOT ${p.gV.toFixed(1)}。${gap>0?`<br>還差約 ${fmtT(gap)}，${p.gV-p.V>3?'目標偏積極，建議穩定累積里程。':'持續訓練有機會達成！'}`:'<br>目前體能已達目標，維持即可。'}</p>
  <table><tr><td>輕鬆 / 長跑</td><td>${fmtP(p.P.E)}</td></tr><tr><td>目標配速</td><td>${fmtP(p.P.G)}</td></tr><tr><td>節奏 T</td><td>${fmtP(p.P.T)}</td></tr><tr><td>間歇 I</td><td>${fmtP(p.P.I)}</td></tr></table></div>`+
- p.out.map(w=>`<div class="card wk"><h3>第 ${w.w} 週・${w.phase}・約 ${w.km} km</h3>${w.days.map(d=>`<div>${d[0]}　<span class="tag ${TAG[d[1]][1]}">${TAG[d[1]][0]}</span>${esc(d[2])}　<span class="muted">${fmtP(d[3])}</span></div>`).join('')}<div class="muted">其餘日休息或交叉訓練</div></div>`).join('')}
+ p.out.map(w=>`<div class="card wk"><h3>第 ${w.w} 週・${w.phase}・約 ${w.km} km</h3>${w.days.map(d=>`<div>${d[0]}　<span class="tag ${TAG[d[1]][1]}">${TAG[d[1]][0]}</span> ${esc(d[2])}　<span class="muted">${fmtP(d[3])}</span></div>`).join('')}<div class="muted">其餘日休息或交叉訓練</div></div>`).join('')}
 $('#genPlan').onclick=()=>{const sec=parseT($('#gTime').value),date=$('#gDate').value;if(!(sec>0)||!date)return alert('請填寫比賽日期與目標時間');if(date<=today())return alert('比賽日期需在今天之後');S.set('goal',{dist:+$('#gDist').value,date,sec,days:$('#gDays').value});renderPlan()};
 
 // ---------- coach (rule-based; LLM optional) ----------
@@ -93,7 +93,7 @@ function coachTips(){const T=[];const add=(c,t)=>T.push({c,t});
  if(b){const V=b.v,E=paceAt(V,.70),Efast=paceAt(V,.76);const rec=runs.filter(r=>daysAgo(r.date)<=21);
   const easyish=rec.filter(r=>r.distanceKm<15);const tooFast=easyish.filter(r=>r.durationSec/r.distanceKm<Efast).length;
   if(easyish.length>=3&&tooFast/easyish.length>0.6)add('warn',`近 3 週 ${tooFast}/${easyish.length} 次跑得比輕鬆配速（${fmtP(E)}）快，八成以上的跑量應該輕鬆跑。`);
-  else if(easyish.length>=3)add('good','輕鬆跑配速控制得不錯 👍');
+  else if(easyish.length>=3)add('good','輕鬆跑配速控制得不錯，維持這個節奏。');
   if(g){const pred=vdotTime(V,g.dist);const wk=Math.ceil((Date.parse(g.date)-Date.parse(today()))/(7*864e5));
    add(pred<=g.sec?'good':'',`目標 ${DN[g.dist]||''} ${fmtT(g.sec)}：目前預測 ${fmtT(pred)}，${pred<=g.sec?'已在目標範圍內！':'還差 '+fmtT(pred-g.sec)+'，剩 '+wk+' 週。'}`);
    if(g.dist>=42){const lr=Math.max(0,...runs.filter(r=>daysAgo(r.date)<=28).map(r=>r.distanceKm));if(lr<25&&wk<=10)add('warn',`近 4 週最長只跑 ${lr.toFixed(1)} km，全馬備賽建議逐步拉到 28–32 km 長跑。`);
@@ -117,6 +117,34 @@ $('#clearBtn').onclick=()=>{if(confirm('清除所有資料？')){['runs','race',
 
 // ---------- init ----------
 if(!S.get('race',null))S.set('race',{dist:42.195,sec:parseT('4:03:00'),date:''});
-function renderAll(){renderLog();renderFit();renderPlan();renderCoach()}
+function renderHero(){
+ const SUB4=14400,BASE=6.5*3600,C=2*Math.PI*46;
+ const b=bestEffort(),wk=weeklyKm(1)[0];
+ const text=(id,v)=>{const el=$(id);if(el)el.textContent=v};
+ text('#heroWeek',(Math.round(wk*10)/10).toFixed(1));
+ const ring=$('#heroRingArc'),bar=$('#heroBar'),gapEl=$('#heroGap');
+ let pct=0,slogan='今天就出門。熱血不等人。',ahead=false;
+ if(!b){text('#heroMara','—');text('#heroVdot','—');text('#heroGap','—');text('#heroPct','0%');text('#heroGapLabel','距 SUB-4')}
+ else{
+  const V=b.v,mara=vdotTime(V,42.195),gap=mara-SUB4;
+  pct=Math.max(0,Math.min(100,(BASE-mara)/(BASE-SUB4)*100));
+  if(mara<=SUB4)pct=100;
+  ahead=gap<=30;
+  text('#heroMara',fmtT(mara));
+  text('#heroVdot',V.toFixed(1));
+  text('#heroGap',fmtT(Math.abs(gap)));
+  text('#heroPct',Math.round(pct)+'%');
+  text('#heroGapLabel',ahead?'領先 SUB-4':'距 SUB-4');
+  slogan=ahead?'SUB-4 已在腳下。守住節奏，把它跑完。':gap<8*60?'終點線看得到了。再把配速咬住。':'每一公里都在把 4 小時拉近。';
+ }
+ text('#slogan',slogan);
+ if(gapEl)gapEl.classList.toggle('ahead',ahead);
+ const apply=()=>{
+  if(ring){ring.style.strokeDasharray=String(C);ring.style.strokeDashoffset=String(C*(1-pct/100))}
+  if(bar)bar.style.width=pct+'%';
+ };
+ requestAnimationFrame(()=>requestAnimationFrame(apply));
+}
+function renderAll(){renderLog();renderFit();renderPlan();renderCoach();renderHero()}
 renderAll();updPace();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');

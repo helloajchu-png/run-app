@@ -1,13 +1,105 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0f766e"><link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes">
-<title>跑步教練</title><link rel="stylesheet" href="style.css"></head><body>
-<header><h1>🏃 跑步教練</h1></header>
-<nav><button data-tab="log" class="on">紀錄</button><button data-tab="fit">體能</button><button data-tab="plan">課表</button><button data-tab="coach">教練</button></nav>
+<meta name="theme-color" content="#121212">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>跑步教練</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+TC:wght@400;700&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
+        <defs>
+          <linearGradient id="bolt" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ff4d00"/>
+            <stop offset="1" stop-color="#ffe14a"/>
+          </linearGradient>
+        </defs>
+        <path fill="url(#bolt)" d="M28 2 12 26h12L16 46l22-28H24L32 2z"/>
+      </svg>
+      <div>
+        <p class="kicker">RACE DAY</p>
+        <h1>跑步教練</h1>
+      </div>
+    </div>
+    <p class="slogan" id="slogan">今天就出門。熱血不等人。</p>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="stat-board">
+      <article class="stat stat-mara">
+        <div>
+          <p class="stat-label">預測全馬</p>
+          <p class="stat-num" id="heroMara">—</p>
+          <p class="stat-sub">VDOT · 42.195 km</p>
+        </div>
+        <div class="ring-wrap" aria-label="SUB-4 進度">
+          <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+            <defs>
+              <linearGradient id="ringFire" x1="0" y1="1" x2="1" y2="0">
+                <stop offset="0%" stop-color="#ff3b00"/>
+                <stop offset="100%" stop-color="#ffe14a"/>
+              </linearGradient>
+            </defs>
+            <circle class="ring-track" cx="60" cy="60" r="46"/>
+            <circle id="heroRingArc" class="ring-val" cx="60" cy="60" r="46"/>
+          </svg>
+          <div class="ring-label">
+            <b id="heroPct">0%</b>
+            <span>SUB-4</span>
+          </div>
+        </div>
+      </article>
+      <article class="stat">
+        <p class="stat-label">VDOT</p>
+        <p class="stat-mid" id="heroVdot">—</p>
+      </article>
+      <article class="stat">
+        <p class="stat-label">本週公里</p>
+        <p class="stat-mid" id="heroWeek">0.0</p>
+      </article>
+      <article class="stat stat-wide">
+        <div class="gap-row">
+          <p class="stat-label" id="heroGapLabel">距 SUB-4</p>
+          <p class="stat-mid" id="heroGap">—</p>
+        </div>
+        <div class="bar" aria-hidden="true"><span id="heroBar"></span></div>
+      </article>
+    </div>
+  </div>
+</header>
+<nav aria-label="主要">
+  <button type="button" data-tab="log" class="on">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h14v17H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+    <span>紀錄</span>
+  </button>
+  <button type="button" data-tab="fit">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h4l2.2-5.5L13 18l2.2-6H22"/></svg>
+    <span>體能</span>
+  </button>
+  <button type="button" data-tab="plan">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v14h-15z"/><path d="M8 3.5v4M16 3.5v4M4.5 9.5h15"/></svg>
+    <span>課表</span>
+  </button>
+  <button type="button" data-tab="coach">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13.5v-1a8 8 0 0 1 16 0v1"/><path d="M3.5 13.5h3.5v6H3.5zM17 13.5h3.5v6H17z"/></svg>
+    <span>教練</span>
+  </button>
+</nav>
 <main>
 <section id="log" class="tab on">
- <form id="runForm" class="card"><h2 id="formTitle">新增跑步</h2>
+ <form id="runForm" class="card">
+  <p class="kicker">SPLIT</p>
+  <h2 id="formTitle">新增跑步</h2>
   <input type="hidden" id="editId">
   <label>日期<input type="date" id="fDate" required></label>
   <label>距離 (公里)<input type="number" id="fDist" step="0.01" min="0.1" required inputmode="decimal"></label>
@@ -17,36 +109,72 @@
   <div class="pace" id="fPace">配速：—</div>
   <div class="row"><button type="submit">儲存</button><button type="button" id="cancelEdit" class="ghost" hidden>取消</button></div>
  </form>
- <div class="card"><h2>Garmin 匯入</h2><p class="muted">從 Garmin Connect 匯出 Activities.csv、GPX 或 FIT 檔後上傳（重複的日期＋距離會自動略過）。</p>
+ <div class="card">
+  <p class="kicker">IMPORT</p>
+  <h2>Garmin 匯入</h2>
+  <p class="muted">從 Garmin Connect 匯出 Activities.csv、GPX 或 FIT 檔後上傳（重複的日期＋距離會自動略過）。</p>
   <label class="filebtn">選擇檔案<input type="file" id="garminFile" accept=".csv,.gpx,.fit" multiple hidden></label>
-  <div id="importMsg" class="muted"></div></div>
- <div class="card"><h2>跑步紀錄 <span id="runCount" class="muted"></span></h2><ul id="runList" class="list"></ul></div>
+  <div id="importMsg" class="muted"></div>
+ </div>
+ <div class="card card-list">
+  <p class="kicker">HISTORY</p>
+  <h2>跑步紀錄 <span id="runCount" class="muted"></span></h2>
+  <ul id="runList" class="list"></ul>
+ </div>
 </section>
 <section id="fit" class="tab">
- <div class="card"><h2>近期比賽成績</h2>
-  <div class="row"><select id="raceDist"><option value="5">5K</option><option value="10">10K</option><option value="21.0975">半馬</option><option value="42.195" selected>全馬</option></select>
-  <input id="raceTime" placeholder="4:03:00"><input type="date" id="raceDate"></div>
-  <button id="saveRace">儲存比賽成績</button></div>
- <div class="card"><h2>成績預測</h2><div id="predict"></div></div>
+ <div class="card">
+  <p class="kicker">RESULT</p>
+  <h2>近期比賽成績</h2>
+  <div class="row">
+   <select id="raceDist"><option value="5">5K</option><option value="10">10K</option><option value="21.0975">半馬</option><option value="42.195" selected>全馬</option></select>
+   <input id="raceTime" placeholder="4:03:00">
+   <input type="date" id="raceDate">
+  </div>
+  <button id="saveRace">儲存比賽成績</button>
+ </div>
+ <div class="card">
+  <p class="kicker">PREDICT</p>
+  <h2>成績預測</h2>
+  <div id="predict"></div>
+ </div>
 </section>
 <section id="plan" class="tab">
- <div class="card"><h2>目標賽事</h2>
+ <div class="card">
+  <p class="kicker">TARGET</p>
+  <h2>目標賽事</h2>
   <label>距離<select id="gDist"><option value="5">5K</option><option value="10">10K</option><option value="21.0975">半馬</option><option value="42.195" selected>全馬</option></select></label>
   <label>比賽日期<input type="date" id="gDate"></label>
   <label>目標時間<input id="gTime" placeholder="3:59:00"></label>
   <label>每週跑步天數<select id="gDays"><option>3</option><option>4</option><option selected>5</option><option>6</option></select></label>
-  <button id="genPlan">產生課表</button></div>
+  <button id="genPlan">產生課表</button>
+ </div>
  <div id="planOut"></div>
 </section>
 <section id="coach" class="tab">
- <div class="card"><h2>AI 教練建議</h2><div id="tips"></div></div>
- <div class="card"><h2>LLM 設定（選用）</h2><p class="muted">目前使用內建規則。未來可填入 OpenAI 相容 API 端點與金鑰，取得更個人化建議；金鑰只存在本機瀏覽器。</p>
+ <div class="card">
+  <p class="kicker">COACH</p>
+  <h2>AI 教練建議</h2>
+  <div id="tips"></div>
+ </div>
+ <div class="card">
+  <p class="kicker">OPTIONAL</p>
+  <h2>LLM 設定（選用）</h2>
+  <p class="muted">目前使用內建規則。未來可填入 OpenAI 相容 API 端點與金鑰，取得更個人化建議；金鑰只存在本機瀏覽器。</p>
   <label>API 端點<input id="llmUrl" placeholder="https://api.openai.com/v1/chat/completions"></label>
   <label>模型<input id="llmModel" placeholder="gpt-4o-mini"></label>
   <label>API 金鑰<input id="llmKey" type="password"></label>
   <div class="row"><button id="saveLlm">儲存</button><button id="askLlm" class="ghost">詢問 LLM</button></div>
-  <div id="llmOut"></div></div>
- <div class="card"><h2>資料</h2><div class="row"><button id="exportBtn" class="ghost">匯出 JSON</button><button id="clearBtn" class="danger">清除全部</button></div></div>
+  <div id="llmOut"></div>
+ </div>
+ <div class="card">
+  <p class="kicker">DATA</p>
+  <h2>資料</h2>
+  <div class="row"><button id="exportBtn" class="ghost">匯出 JSON</button><button id="clearBtn" class="danger">清除全部</button></div>
+ </div>
 </section>
 </main>
-<script src="garmin-import.js"></script><script src="app.js"></script></body></html>
+<script src="garmin-import.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
