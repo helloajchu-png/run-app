@@ -369,6 +369,19 @@ td:not(:first-child),th:not(:first-child){font-family:var(--cond);font-variant-n
   #log.tab.on{display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start}
   #log.tab.on .card-list{grid-column:1 / -1}
 }
+.site-foot{max-width:720px;margin:0 auto;padding:4px 16px 28px;text-align:center}
+.site-foot a,.textlink{color:var(--gold);font-family:var(--cond);letter-spacing:.08em;text-decoration:none}
+.site-foot a:hover,.textlink:hover{text-decoration:underline}
+.fineprint{margin-top:12px}
+body.legal{padding-bottom:32px}
+.legal-wrap{max-width:720px;margin:0 auto;padding:calc(28px + env(safe-area-inset-top)) 16px 48px}
+.legal-wrap .brand{text-decoration:none;color:inherit;margin-bottom:14px}
+.legal-wrap h1{font-size:32px}
+.legal-wrap h2{font-size:18px;margin:22px 0 8px}
+.legal-wrap p{margin:0 0 12px;font-size:15px;line-height:1.75}
+.legal-wrap ul{margin:0 0 12px;padding-left:1.2em}
+.legal-wrap li{margin:0 0 6px;font-size:15px;line-height:1.7}
+.legal-wrap a{color:var(--gold)}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none !important;transition:none !important}
 }
