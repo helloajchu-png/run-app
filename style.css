@@ -227,22 +227,24 @@ h2{font-size:20px;font-weight:700;margin:0 0 12px;letter-spacing:.02em}
 label{display:block;font-size:13px;color:var(--muted);margin:0 0 10px}
 input,select,textarea{
   width:100%;
+  min-height:44px;
   margin-top:6px;
   padding:12px;
   font-size:16px;
   font-family:inherit;
-  color:var(--ink);
-  background:#101010;
+  color:#f4f1ec;
+  background:#161616;
+  background-color:#161616;
   border:1px solid #3a3834;
   border-radius:0;
   color-scheme:dark;
-}
-textarea,#chatMsg{
   -webkit-appearance:none;
   appearance:none;
+}
+textarea,#chatMsg{
   display:block;
   width:100%;
-  min-height:168px;
+  min-height:180px;
   resize:vertical;
   line-height:1.5;
   background:#161616;
@@ -250,6 +252,8 @@ textarea,#chatMsg{
   color:#f4f1ec;
   border:1px solid #ff6a00;
   caret-color:#ffe14a;
+  -webkit-appearance:none;
+  appearance:none;
 }
 #chatMsg::placeholder{color:#9a958c;opacity:1}
 #chatMsg:focus{
@@ -257,9 +261,33 @@ textarea,#chatMsg{
   border-color:#ffe14a;
   box-shadow:0 0 0 2px rgba(255,59,0,.45);
 }
-#chatSend{width:100%;display:block;margin-top:4px;clip-path:none}
-#chatSend:disabled{opacity:.65;cursor:progress}
-.chat-status{min-height:1.2em;margin:0 0 8px;color:#ffb000;font-size:13px}
+#chatSend{
+  width:100%;
+  min-height:52px;
+  margin-top:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  font-size:18px;
+  clip-path:none;
+  touch-action:manipulation;
+  position:relative;
+  z-index:2;
+}
+#chatSend:disabled{opacity:.7}
+.spin{width:18px;height:18px;border:2px solid #1a0a00;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.chat-status{min-height:0;margin:8px 0 0;color:#ffb000;font-size:15px;line-height:1.4}
+.chat-status:empty{display:none}
+.chat-log{gap:12px}
+.bubble{max-width:92%;padding:12px 14px}
+.bubble.user{margin-left:auto;border-left:0;border-right:3px solid var(--fire)}
+.bubble p{font-size:16px}
+.advanced{margin:0 0 18px;padding:12px 14px;background:#141414}
+button,.filebtn{min-height:44px;touch-action:manipulation}
+nav button{min-height:56px}
+.advanced summary{min-height:44px;display:flex;align-items:center}
 input:focus,select:focus{outline:2px solid var(--fire);outline-offset:1px;border-color:transparent}
 .chat-log{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
 .bubble{padding:10px 12px;background:#141414;border-left:3px solid var(--gold)}

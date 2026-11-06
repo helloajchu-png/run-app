@@ -153,26 +153,22 @@
 </section>
 <section id="coach" class="tab">
  <div class="card">
-  <p class="kicker">COACH</p>
-  <h2>AI 教練建議</h2>
-  <div id="tips"></div>
- </div>
- <div class="card">
   <p class="kicker">ASK</p>
   <h2>問教練</h2>
   <p class="muted">直接問教練。不用填金鑰。送出時會附上你的紀錄、比賽、目標、課表摘要與 VDOT。</p>
   <div id="chatLog" class="chat-log" aria-live="polite"></div>
-  <form id="coachForm">
-   <label for="chatMsg">想問什麼</label>
-   <textarea id="chatMsg" name="message" rows="6" maxlength="2000" placeholder="例如：這週的輕鬆跑要跑多慢？" enterkeyhint="send" autocomplete="off"></textarea>
-   <p id="chatErr" class="chat-status" role="status"></p>
-   <button type="submit" id="chatSend">送出</button>
-  </form>
-  <details class="advanced">
-   <summary>進階：自訂後端網址</summary>
-   <label>後端網址（空白則用預設）<input id="coachUrl" inputmode="url" placeholder="https://run-app-coach.helloajchu.workers.dev" autocomplete="off"></label>
-   <button type="button" id="saveCoachUrl" class="ghost">儲存網址</button>
-  </details>
+  <label for="chatMsg">想問什麼</label>
+  <textarea id="chatMsg" rows="6" maxlength="2000" placeholder="例如：這週的輕鬆跑要跑多慢？" enterkeyhint="send" autocomplete="off"></textarea>
+  <p id="chatErr" class="chat-status" role="alert"></p>
+  <button type="button" id="chatSend">
+   <span id="chatSpin" class="spin" hidden></span>
+   <span id="chatSendLabel">送出</span>
+  </button>
+ </div>
+ <div class="card">
+  <p class="kicker">NOTES</p>
+  <h2>訓練提示</h2>
+  <div id="tips"></div>
  </div>
  <div class="card">
   <p class="kicker">DATA</p>
@@ -180,6 +176,11 @@
   <div class="row"><button id="exportBtn" class="ghost">匯出 JSON</button><button id="clearBtn" class="danger">清除全部</button></div>
   <p class="fineprint"><a class="textlink" href="privacy.html">隱私權政策</a></p>
  </div>
+ <details class="advanced">
+  <summary>進階：自訂後端網址</summary>
+  <label>後端網址（空白則用預設）<input id="coachUrl" inputmode="url" placeholder="https://run-app-coach.helloajchu.workers.dev" autocomplete="off"></label>
+  <button type="button" id="saveCoachUrl" class="ghost">儲存網址</button>
+ </details>
 </section>
 </main>
 <footer class="site-foot"><a href="privacy.html">隱私權政策</a></footer>

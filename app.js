@@ -120,33 +120,35 @@ function coachContext(){
 function coachEndpoint(){const v=($('#coachUrl')&&$('#coachUrl').value||S.get('coachUrl','')||'').trim().replace(/\/+$/,'');return v||COACH_API}
 let chat=[];
 function renderChat(){const el=$('#chatLog');if(!el)return;el.innerHTML=chat.length?chat.map(m=>`<div class="bubble ${m.role}"><span class="who">${m.role==='user'?'你':'教練'}</span><p>${esc(m.text).replace(/\n/g,'<br>')}</p></div>`).join(''):'<p class="muted">問一個具體的問題，例如配速、這週課表或恢復。</p>'}
-async function askCoach(e){
- e.preventDefault();
- const btn=$('#chatSend'),box=$('#chatMsg'),err=$('#chatErr');
- if(!btn||btn.disabled)return;
+let coachBusy=false;
+async function askCoach(){
+ const btn=$('#chatSend'),box=$('#chatMsg'),err=$('#chatErr'),label=$('#chatSendLabel'),spin=$('#chatSpin');
+ if(!btn||!box||coachBusy)return;
  const message=box.value.trim();
  if(!message){err.textContent='先寫下想問教練的問題';return}
- btn.disabled=true;btn.textContent='送出中…';err.textContent='';
+ coachBusy=true;btn.disabled=true;err.textContent='';
+ if(label)label.textContent='送出中…';if(spin)spin.hidden=false;
  chat.push({role:'user',text:message});
  const pending={role:'coach',text:'思考中…'};chat.push(pending);
  box.value='';renderChat();
- const last=$('#chatLog').lastElementChild;if(last)last.scrollIntoView({block:'nearest'});
- const base=coachEndpoint();
  let context='{}';
  try{context=coachContext()}catch(err2){context=JSON.stringify({note:'上下文整理失敗',detail:String(err2)})}
  try{
-  const r=await fetch(base+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,context})});
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok||typeof j.reply!=='string')throw new Error(j.error||j.message||('HTTP '+r.status));
+  const r=await fetch(coachEndpoint()+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,context})});
+  const raw=await r.text();
+  let j={};try{j=JSON.parse(raw)}catch{}
+  if(!r.ok||typeof j.reply!=='string')throw new Error(j.error||j.message||raw.slice(0,160)||('HTTP '+r.status));
   pending.text=j.reply||'（沒有回覆）';
  }catch(ex){
   if(chat[chat.length-1]===pending)chat.pop();
   if(chat[chat.length-1]&&chat[chat.length-1].role==='user')chat.pop();
   box.value=message;err.textContent='送出失敗：'+ex.message;
+ }finally{
+  coachBusy=false;btn.disabled=false;if(label)label.textContent='送出';if(spin)spin.hidden=true;renderChat();
  }
- btn.disabled=false;btn.textContent='送出';renderChat();
 }
-$('#coachForm').addEventListener('submit',askCoach);
+const sendBtn=document.getElementById('chatSend');
+if(sendBtn)sendBtn.addEventListener('click',askCoach);
 $('#saveCoachUrl').onclick=()=>{const v=$('#coachUrl').value.trim();if(v)S.set('coachUrl',v);else localStorage.removeItem('ra_coachUrl');alert(v?'已改用自訂網址':'已恢復預設教練')};
 function renderCoach(){$('#tips').innerHTML=coachTips().map(t=>`<div class="tip ${t.c}">${esc(t.t)}</div>`).join('');
  const urlEl=$('#coachUrl');if(urlEl&&document.activeElement!==urlEl)urlEl.value=S.get('coachUrl','')||'';renderChat()}
