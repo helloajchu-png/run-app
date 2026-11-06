@@ -38,6 +38,15 @@ CREATE TABLE IF NOT EXISTS posts (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS garmin_oauth (
+  sid TEXT PRIMARY KEY,
+  request_token TEXT,
+  request_secret TEXT,
+  access_token TEXT,
+  access_secret TEXT,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS likes (
   post_id TEXT NOT NULL REFERENCES posts(id),
   user_id TEXT NOT NULL REFERENCES users(id),

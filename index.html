@@ -111,6 +111,17 @@
   <div class="pace" id="fPace">配速：—</div>
   <div class="row"><button type="submit">儲存</button><button type="button" id="cancelEdit" class="ghost" hidden>取消</button></div>
  </form>
+ <div class="card" id="garminConnect">
+  <p class="kicker">CONNECT</p>
+  <h2>連結 Garmin</h2>
+  <p id="garminState" class="muted">尚未連結</p>
+  <div class="row">
+   <button type="button" id="garminLink">連結 Garmin</button>
+   <button type="button" id="garminSync" class="ghost" hidden>同步最近活動</button>
+   <button type="button" id="garminUnlink" class="ghost" hidden>解除連結</button>
+  </div>
+  <p id="garminMsg" class="chat-status" role="status"></p>
+ </div>
  <details class="advanced">
   <summary>Garmin 匯入</summary>
   <p class="muted">從 Garmin Connect 匯出 Activities.csv、GPX 或 FIT 後上傳。重複的日期加距離會略過。</p>
@@ -224,5 +235,6 @@
 <script src="garmin-import.js"></script>
 <script src="app.js"></script>
 <script src="community.js"></script>
+<script src="garmin-connect.js"></script>
 </body>
 </html>

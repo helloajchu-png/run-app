@@ -1,3 +1,5 @@
+import { handleGarmin } from './garmin.js';
+
 const ORIGIN = 'https://helloajchu-png.github.io';
 
 function json(data, status = 200) {
@@ -38,7 +40,16 @@ export default {
     if (request.method === 'OPTIONS') return json({ ok: true });
     const url = new URL(request.url);
     try {
-      if (url.pathname === '/health') return json({ ok: true, mode: 'd1' });
+      if (url.pathname === '/health') return json({ ok: true, mode: env.DB ? 'd1' : 'no-db', garmin: true });
+      if (url.pathname.startsWith('/garmin/')) {
+        try {
+          return json(await handleGarmin(request, env, url));
+        } catch (err) {
+          const missing = /no such table|Garmin_oauth|D1/i.test(String(err && err.message || err));
+          const message = missing ? 'garmin_oauth 資料表尚未建立，請執行 schema.sql' : String(err && err.message || err);
+          return json({ error: message }, err.status || (missing ? 503 : 500));
+        }
+      }
       const body = request.method === 'GET' ? {} : await request.json().catch(() => ({}));
 
       if (url.pathname === '/auth/register' && request.method === 'POST') {

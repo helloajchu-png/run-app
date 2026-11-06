@@ -198,6 +198,8 @@ nav button{font-size:10px}
 .today-kicker{font-family:var(--cond);letter-spacing:.16em;color:var(--gold);font-size:12px;margin:0 0 6px}
 .today-title{font-family:var(--display),var(--sans);font-size:56px;line-height:.9;margin:0}
 .today-detail{margin:8px 0 0;font-size:16px;line-height:1.5}
+#askToday,#garminLink,#garminSync,#garminUnlink{min-height:48px;clip-path:none}
+#garminConnect .row{align-items:stretch}
 #askToday{width:100%;min-height:52px;margin:12px 0 8px;font-size:18px;clip-path:none}
 .pred-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pred-num{font-family:var(--display);font-size:clamp(40px,12vw,64px);line-height:.85;margin-top:4px}
