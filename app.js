@@ -20,7 +20,7 @@ const updPace=()=>{const d=+$('#fDist').value,t=parseT($('#fTime').value);$('#fP
 ['#fDist','#fTime'].forEach(s=>$(s).oninput=updPace);
 $('#runForm').onsubmit=e=>{e.preventDefault();const t=parseT($('#fTime').value),d=+$('#fDist').value;if(!(t>0&&d>0))return alert('請輸入正確的距離與時間');
  const r={id:$('#editId').value||crypto.randomUUID?.()||String(Date.now()),date:$('#fDate').value,distanceKm:d,durationSec:t,avgHr:+$('#fHr').value||null,note:$('#fNote').value.trim(),source:'manual'};
- const i=runs.findIndex(x=>x.id===r.id);if(i>=0){r.source=runs[i].source;runs[i]=r}else runs.push(r);resetForm();save()};
+ const editing=!!$('#editId').value;const i=runs.findIndex(x=>x.id===r.id);if(i>=0){r.source=runs[i].source;runs[i]=r}else runs.push(r);resetForm();save();if(!editing&&window.communityOnRun)window.communityOnRun(r)};
 function resetForm(){$('#runForm').reset();$('#editId').value='';$('#fDate').value=today();$('#formTitle').textContent='新增跑步';$('#cancelEdit').hidden=true;updPace()}
 $('#cancelEdit').onclick=resetForm;
 function editRun(id){const r=runs.find(x=>x.id===id);if(!r)return;$('#editId').value=r.id;$('#fDate').value=r.date;$('#fDist').value=r.distanceKm;$('#fTime').value=fmtT(r.durationSec);$('#fHr').value=r.avgHr||'';$('#fNote').value=r.note||'';$('#formTitle').textContent='編輯跑步';$('#cancelEdit').hidden=false;updPace();scrollTo({top:0,behavior:'smooth'})}
@@ -225,7 +225,8 @@ function renderHero(){
 }
 function renderAll(){renderLog();renderFit();renderPlan();renderCoach();renderHero();renderToday()}
 renderAll();updPace();
-const APP_VER='run-app-v9';
+const APP_VER='run-app-v10';
 function showToast(msg){let el=$('#toast');if(!el){el=document.createElement('p');el.id='toast';el.className='toast';document.body.appendChild(el)}el.textContent=msg}
 function noteUpdate(){const prev=localStorage.getItem('ra_sw');const back=!!(prev||navigator.serviceWorker?.controller);if(prev!==APP_VER&&back&&sessionStorage.getItem('ra_toasted')!==APP_VER){sessionStorage.setItem('ra_toasted',APP_VER);showToast('已更新，請再試一次')}localStorage.setItem('ra_sw',APP_VER)}
 if('serviceWorker' in navigator){noteUpdate();navigator.serviceWorker.register('sw.js');navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.version)noteUpdate()});navigator.serviceWorker.addEventListener('controllerchange',noteUpdate)}
+window.RA={get runs(){return runs},S,$,fmtP,fmtT,DN,today,daysAgo,weeklyKm};

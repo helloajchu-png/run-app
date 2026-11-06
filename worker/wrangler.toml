@@ -1,0 +1,8 @@
+name = "run-app-api"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "run-app"
+database_id = "REPLACE_AFTER_wrangler_d1_create"

@@ -185,7 +185,13 @@ nav button{
   clip-path:none;
   cursor:pointer;
 }
-nav button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:miter}
+nav button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:miter}
+nav button{font-size:10px}
+.feed{display:flex;flex-direction:column;gap:10px}
+.feed article{background:#141414;padding:12px;border-left:3px solid #ff6a00}
+.feed .who{font-family:var(--cond);letter-spacing:.06em;color:var(--gold)}
+.feed p{margin:6px 0;line-height:1.45}
+.like{min-height:44px;clip-path:none}
 .hero.slim{padding-bottom:22px}
 .hero.slim .mark{width:32px;height:32px}
 .hero.slim h1{font-size:22px}

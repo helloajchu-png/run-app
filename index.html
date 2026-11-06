@@ -56,6 +56,10 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13.5v-1a8 8 0 0 1 16 0v1"/><path d="M3.5 13.5h3.5v6H3.5zM17 13.5h3.5v6H17z"/></svg>
     <span>教練</span>
   </button>
+  <button type="button" data-tab="social">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.3"/><path d="M3.5 19c.6-2.6 2.6-4 4.5-4s3.9 1.4 4.5 4"/><path d="M14 15.2c1.2-.7 2.6-.8 4 0 .7 1.4 1.2 2.6 1.5 3.8"/></svg>
+    <span>社群</span>
+  </button>
 </nav>
 <main>
 <section id="today" class="tab on">
@@ -178,9 +182,47 @@
   <button type="button" id="saveCoachUrl" class="ghost">儲存網址</button>
  </details>
 </section>
+<section id="social" class="tab">
+ <div class="card" id="socialGate">
+  <p class="kicker">CREW</p>
+  <h2>跟跑友一起</h2>
+  <p class="muted">暱稱加 4 位數 PIN。預設只有好友看得到你的週跑量、配速、目標賽跟動態。</p>
+  <label>暱稱<input id="nickName" maxlength="16" autocomplete="username" placeholder="例如 阿哲"></label>
+  <label>PIN<input id="nickPin" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="4 位數字"></label>
+  <div class="row"><button type="button" id="nickIn">進入</button><button type="button" id="nickUp" class="ghost">建立</button></div>
+  <p id="socialMsg" class="chat-status" role="status"></p>
+ </div>
+ <div id="socialApp" hidden>
+  <p id="socialMode" class="muted"></p>
+  <div class="card">
+   <p class="kicker">YOU</p>
+   <h2 id="socialName">我</h2>
+   <div class="pred-grid">
+    <article class="stat"><p class="stat-label">本週公里</p><p class="pred-num" id="meKm">0</p></article>
+    <article class="stat"><p class="stat-label">平均配速</p><p class="pred-num" id="mePace">—</p></article>
+   </div>
+   <p class="muted" id="meGoal"></p>
+   <label>下週計畫（選填）<textarea id="meBlurb" rows="3" maxlength="280" placeholder="例如：週日長跑 28km，最後 8km 目標配速"></textarea></label>
+   <button type="button" id="shareWeek">分享本週給好友</button>
+  </div>
+  <div class="card">
+   <p class="kicker">FRIENDS</p>
+   <h2>加好友</h2>
+   <div class="row"><input id="friendNick" maxlength="16" placeholder="好友暱稱"><button type="button" id="addFriend">加入</button></div>
+   <p id="friendMsg" class="chat-status" role="status"></p>
+  </div>
+  <div class="card">
+   <p class="kicker">FEED</p>
+   <h2>好友動態</h2>
+   <div id="socialFeed"></div>
+  </div>
+  <button type="button" id="socialOut" class="ghost">登出</button>
+ </div>
+</section>
 </main>
 <footer class="site-foot"><a href="privacy.html">隱私權政策</a></footer>
 <script src="garmin-import.js"></script>
 <script src="app.js"></script>
+<script src="community.js"></script>
 </body>
 </html>
