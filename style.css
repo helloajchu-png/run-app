@@ -174,18 +174,35 @@ nav{
 nav button{
   position:relative;
   flex:1;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  min-height:62px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  min-height:58px;
   border:0;background:transparent;color:#8d887f;
-  padding:8px 0 6px;
+  padding:6px 0 4px;
   font-family:var(--sans);
-  font-size:12px;
+  font-size:11px;
   font-weight:700;
-  letter-spacing:.06em;
+  letter-spacing:0;
   clip-path:none;
   cursor:pointer;
 }
-nav button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:miter}
+nav button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:miter}
+.hero.slim{padding-bottom:22px}
+.hero.slim .mark{width:32px;height:32px}
+.hero.slim h1{font-size:22px}
+.today-kicker{font-family:var(--cond);letter-spacing:.16em;color:var(--gold);font-size:12px;margin:0 0 6px}
+.today-title{font-family:var(--display),var(--sans);font-size:56px;line-height:.9;margin:0}
+.today-detail{margin:8px 0 0;font-size:16px;line-height:1.5}
+#askToday{width:100%;min-height:52px;margin:12px 0 8px;font-size:18px;clip-path:none}
+.pred-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pred-num{font-family:var(--display);font-size:clamp(40px,12vw,64px);line-height:.85;margin-top:4px}
+.weekcal{display:flex;flex-direction:column;gap:8px}
+.calday{display:grid;grid-template-columns:28px 72px 1fr;gap:8px;align-items:center;min-height:52px;padding:8px 10px;background:#141414;border-left:3px solid #333}
+.calday.is-today{border-left-color:#ff6a00}
+.calday.is-done{opacity:.55}
+.calday input{width:22px;height:22px;min-height:22px;margin:0;accent-color:#ff6a00}
+.calwhen{display:flex;flex-direction:column;font-family:var(--cond);letter-spacing:.04em}
+.calwhen b{font-family:var(--display);font-size:20px;font-weight:400;letter-spacing:.03em}
+.calwhat{font-size:14px;line-height:1.35}
 nav button.on{color:#fff}
 nav button.on::before{
   content:"";
@@ -225,7 +242,7 @@ h2{font-size:20px;font-weight:700;margin:0 0 12px;letter-spacing:.02em}
 .card .kicker{margin-bottom:2px}
 
 label{display:block;font-size:13px;color:var(--muted);margin:0 0 10px}
-input,select,textarea{
+input:not([type=checkbox]),select,textarea{
   width:100%;
   min-height:44px;
   margin-top:6px;

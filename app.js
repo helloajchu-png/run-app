@@ -45,8 +45,9 @@ function bestEffort(){const c=[];const race=S.get('race',null);
  c.forEach(x=>x.v=vdot(x.km,x.sec));c.sort((a,b)=>b.v-a.v);return c[0]||null}
 function renderFit(){const race=S.get('race',null);if(race){$('#raceDist').value=String(race.dist);$('#raceTime').value=fmtT(race.sec);$('#raceDate').value=race.date||''}
  const b=bestEffort();if(!b){$('#predict').innerHTML='<p class="muted">請先記錄近 8 週內 3 公里以上的跑步，或輸入比賽成績。</p>';return}
- const V=b.v;$('#predict').innerHTML=`<p>依據：<b>${esc(b.label)}</b><br>VDOT 估計：<b>${V.toFixed(1)}</b></p><table><tr><th>距離</th><th>Riegel 預測</th><th>VDOT 預測</th><th>配速</th></tr>${[5,10,21.0975,42.195].map(d=>{const t=riegel(b.sec,b.km,d);return`<tr><td>${DN[d]}</td><td>${fmtT(t)}</td><td>${fmtT(vdotTime(V,d))}</td><td>${fmtP(t/d)}</td></tr>`}).join('')}</table>
- <h2 style="margin-top:12px">訓練配速（VDOT）</h2><table><tr><td>輕鬆跑 E</td><td>${fmtP(paceAt(V,.74))} ～ ${fmtP(paceAt(V,.65))}</td></tr><tr><td>馬拉松配速 M</td><td>${fmtP(vdotTime(V,42.195)/42.195)}</td></tr><tr><td>閾值 T</td><td>${fmtP(paceAt(V,.88))}</td></tr><tr><td>間歇 I</td><td>${fmtP(paceAt(V,.975))}</td></tr></table>`}
+ const V=b.v;
+ const card=(label,time,sub)=>`<article class="stat"><p class="stat-label">${label}</p><p class="pred-num">${time}</p><p class="stat-sub">${sub}</p></article>`;
+ $('#predict').innerHTML=`<p class="muted">依據 ${esc(b.label)} · VDOT ${V.toFixed(1)}</p><div class="pred-grid">${[5,10,21.0975,42.195].map(d=>card(DN[d],fmtT(vdotTime(V,d)),fmtP(vdotTime(V,d)/d))).join('')}</div><h2 style="margin-top:16px">訓練配速</h2><div class="pred-grid">${[['輕鬆 E',fmtP(paceAt(V,.70))],['馬拉松 M',fmtP(vdotTime(V,42.195)/42.195)],['閾值 T',fmtP(paceAt(V,.88))],['間歇 I',fmtP(paceAt(V,.975))]].map(([n,p])=>card(n,p,'每公里')).join('')}</div>`}
 $('#saveRace').onclick=()=>{const sec=parseT($('#raceTime').value);if(!(sec>0))return alert('請輸入成績，例如 4:03:00');S.set('race',{dist:+$('#raceDist').value,sec,date:$('#raceDate').value});renderAll();alert('已儲存')};
 
 // ---------- plan ----------
@@ -73,12 +74,19 @@ function genPlan(goal){const b=bestEffort();const V=b?b.v:vdot(goal.dist,goal.se
   q.push(['週日','long',lr,P.E]);const O=['週一','週二','週三','週四','週五','週六','週日'];return q.sort((a,b)=>O.indexOf(a[0])-O.indexOf(b[0]))}
  return{V,gV,weeks,P,out}}
 const TAG={easy:['輕鬆','t-easy'],long:['長跑','t-long'],tempo:['節奏','t-tempo'],int:['間歇','t-int'],mp:['配速','t-mp'],race:['比賽','t-race']};
-function renderPlan(){const g=S.get('goal',null);if(!g){$('#gDate').value='';return}
+function weekdayName(iso){const [y,m,d]=iso.split('-').map(Number);return ['週日','週一','週二','週三','週四','週五','週六'][new Date(y,m-1,d).getDay()]}
+function thisWeek(){const [y,m,d]=today().split('-').map(Number);const dt=new Date(y,m-1,d);const day=dt.getDay();dt.setDate(dt.getDate()+(day===0?-6:1-day));const z=n=>String(n).padStart(2,'0');const names=['週一','週二','週三','週四','週五','週六','週日'];const out=[];for(let i=0;i<7;i++){const x=new Date(dt);x.setDate(dt.getDate()+i);out.push({name:names[i],iso:`${x.getFullYear()}-${z(x.getMonth()+1)}-${z(x.getDate())}`})}return out}
+function checks(){return S.get('checks',{})||{}}
+function renderPlan(){const g=S.get('goal',null);if(!g){$('#gDate').value='';$('#planOut').innerHTML='<div class="card"><p class="muted">先設定目標賽事。破 4 全馬請把目標時間填 3:59:00。</p></div>';return}
  $('#gDist').value=String(g.dist);$('#gDate').value=g.date;$('#gTime').value=fmtT(g.sec);$('#gDays').value=g.days;
- const p=genPlan(g);const pred=vdotTime(p.V,g.dist);const gap=pred-g.sec;
- $('#planOut').innerHTML=`<div class="card"><p>距離比賽 <b>${p.weeks}</b> 週。目前預測 ${fmtT(pred)}（VDOT ${p.V.toFixed(1)}），目標需 VDOT ${p.gV.toFixed(1)}。${gap>0?`<br>還差約 ${fmtT(gap)}，${p.gV-p.V>3?'目標偏積極，建議穩定累積里程。':'持續訓練有機會達成！'}`:'<br>目前體能已達目標，維持即可。'}</p>
+ const p=genPlan(g);const pred=vdotTime(p.V,g.dist);const gap=pred-g.sec;const week=p.out[0];const byName={};
+ if(week)week.days.forEach(d=>{byName[d[0]]=d});
+ const done=checks();
+ const cal=thisWeek().map(day=>{const hit=byName[day.name];const text=hit?`${TAG[hit[1]][0]} · ${hit[2]} · ${fmtP(hit[3])}`:'休息或交叉訓練';const on=!!done[day.iso];return `<label class="calday${day.iso===today()?' is-today':''}${on?' is-done':''}"><input type="checkbox" data-iso="${day.iso}"${on?' checked':''}><span class="calwhen">${day.name}<b>${day.iso.slice(5)}</b></span><span class="calwhat">${esc(text)}</span></label>`}).join('');
+ $('#planOut').innerHTML=`<div class="card"><p class="kicker">THIS WEEK</p><h2>本週</h2><div class="weekcal">${cal}</div></div><div class="card"><p>距離比賽 <b>${p.weeks}</b> 週。目前預測 ${fmtT(pred)}（VDOT ${p.V.toFixed(1)}），目標需 VDOT ${p.gV.toFixed(1)}。${gap>0?`<br>還差約 ${fmtT(gap)}，${p.gV-p.V>3?'目標偏積極，建議穩定累積里程。':'持續訓練有機會達成！'}`:'<br>目前體能已達目標，維持即可。'}</p>
  <table><tr><td>輕鬆 / 長跑</td><td>${fmtP(p.P.E)}</td></tr><tr><td>目標配速</td><td>${fmtP(p.P.G)}</td></tr><tr><td>節奏 T</td><td>${fmtP(p.P.T)}</td></tr><tr><td>間歇 I</td><td>${fmtP(p.P.I)}</td></tr></table></div>`+
- p.out.map(w=>`<div class="card wk"><h3>第 ${w.w} 週・${w.phase}・約 ${w.km} km</h3>${w.days.map(d=>`<div>${d[0]}　<span class="tag ${TAG[d[1]][1]}">${TAG[d[1]][0]}</span> ${esc(d[2])}　<span class="muted">${fmtP(d[3])}</span></div>`).join('')}<div class="muted">其餘日休息或交叉訓練</div></div>`).join('')}
+ p.out.slice(1).map(w=>`<div class="card wk"><h3>第 ${w.w} 週・${w.phase}・約 ${w.km} km</h3>${w.days.map(d=>`<div>${d[0]}　<span class="tag ${TAG[d[1]][1]}">${TAG[d[1]][0]}</span> ${esc(d[2])}　<span class="muted">${fmtP(d[3])}</span></div>`).join('')}<div class="muted">其餘日休息或交叉訓練</div></div>`).join('');
+ $('#planOut').querySelectorAll('[data-iso]').forEach(inp=>inp.onchange=()=>{const c=checks();if(inp.checked)c[inp.dataset.iso]=1;else delete c[inp.dataset.iso];S.set('checks',c);inp.closest('.calday').classList.toggle('is-done',inp.checked)})}
 $('#genPlan').onclick=()=>{const sec=parseT($('#gTime').value),date=$('#gDate').value;if(!(sec>0)||!date)return alert('請填寫比賽日期與目標時間');if(date<=today())return alert('比賽日期需在今天之後');S.set('goal',{dist:+$('#gDist').value,date,sec,days:$('#gDays').value});renderPlan()};
 
 // ---------- coach (rule-based; LLM optional) ----------
@@ -153,7 +161,21 @@ $('#saveCoachUrl').onclick=()=>{const v=$('#coachUrl').value.trim();if(v)S.set('
 function renderCoach(){$('#tips').innerHTML=coachTips().map(t=>`<div class="tip ${t.c}">${esc(t.t)}</div>`).join('');
  const urlEl=$('#coachUrl');if(urlEl&&document.activeElement!==urlEl)urlEl.value=S.get('coachUrl','')||'';renderChat()}
 $('#exportBtn').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({runs,race:S.get('race'),goal:S.get('goal')},null,1)],{type:'application/json'}));a.download='runs.json';a.click()};
-$('#clearBtn').onclick=()=>{if(confirm('清除所有資料？')){['runs','race','goal'].forEach(k=>localStorage.removeItem('ra_'+k));runs=[];renderAll()}};
+$('#clearBtn').onclick=()=>{if(confirm('清除所有資料？')){['runs','race','goal','checks'].forEach(k=>localStorage.removeItem('ra_'+k));runs=[];renderAll()}};
+function todaySession(){const g=S.get('goal',null);const name=weekdayName(today());
+ if(g&&g.date===today())return {title:'比賽',detail:`${DN[g.dist]||g.dist+'km'} 目標 ${fmtT(g.sec)}`,pace:fmtP(g.sec/g.dist),rest:false};
+ if(!g||!g.date||g.date<today())return null;
+ const week=genPlan(g).out[0];if(!week)return null;const hit=week.days.find(d=>d[0]===name);
+ if(!hit)return {title:'休息',detail:`${week.phase}・本週約 ${week.km} km。今天沒有排跑，休息或輕度交叉訓練。`,rest:true};
+ return {title:TAG[hit[1]][0],detail:hit[2],pace:fmtP(hit[3]),rest:false,phase:week.phase}}
+function todayQuestion(){const s=todaySession();
+ if(!s)return '我的目標是全馬破 4。今天沒有課表，該跑什麼、配速多少？';
+ if(s.rest)return '今天課表是休息。以全馬破 4 來看，我可以完全休息，還是要做交叉訓練？';
+ return `今天的課是${s.title}：${s.detail}${s.pace?'，配速 '+s.pace:''}。以全馬破 4，我該怎麼跑完今天？`}
+function renderToday(){const el=$('#todayWorkout');if(!el)return;const s=todaySession();
+ el.innerHTML=s?`<p class="today-kicker">${s.rest?'REST':'TODAY'} · ${weekdayName(today())}</p><p class="today-title">${esc(s.title)}</p><p class="today-detail">${esc(s.detail)}${s.pace&&!s.rest?'　'+esc(s.pace):''}</p>`:`<p class="today-kicker">TODAY · ${weekdayName(today())}</p><p class="today-title">先排課</p><p class="today-detail">還沒有進行中的課表。到「課表」把目標設成全馬 3:59:00，今天就能看到該跑什麼。</p>`}
+const askTodayBtn=document.getElementById('askToday');
+if(askTodayBtn)askTodayBtn.addEventListener('click',()=>{const box=$('#chatMsg');if(box)box.value=todayQuestion();const tab=document.querySelector('nav button[data-tab="coach"]');if(tab)tab.click();if(box)box.focus()});
 
 // ---------- init ----------
 if(!S.get('race',null))S.set('race',{dist:42.195,sec:parseT('4:03:00'),date:''});
@@ -185,6 +207,6 @@ function renderHero(){
  };
  requestAnimationFrame(()=>requestAnimationFrame(apply));
 }
-function renderAll(){renderLog();renderFit();renderPlan();renderCoach();renderHero()}
+function renderAll(){renderLog();renderFit();renderPlan();renderCoach();renderHero();renderToday()}
 renderAll();updPace();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');

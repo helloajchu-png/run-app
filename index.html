@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="hero">
+<header class="hero slim">
   <div class="hero-inner">
     <div class="brand">
       <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
@@ -29,56 +29,18 @@
         <path fill="url(#bolt)" d="M28 2 12 26h12L16 46l22-28H24L32 2z"/>
       </svg>
       <div>
-        <p class="kicker">RACE DAY</p>
+        <p class="kicker">SUB-4</p>
         <h1>跑步教練</h1>
       </div>
-    </div>
-    <p class="slogan" id="slogan">今天就出門。熱血不等人。</p>
-    <div class="sheen" aria-hidden="true"></div>
-    <div class="stat-board">
-      <article class="stat stat-mara">
-        <div>
-          <p class="stat-label">預測全馬</p>
-          <p class="stat-num" id="heroMara">—</p>
-          <p class="stat-sub">VDOT · 42.195 km</p>
-        </div>
-        <div class="ring-wrap" aria-label="SUB-4 進度">
-          <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
-            <defs>
-              <linearGradient id="ringFire" x1="0" y1="1" x2="1" y2="0">
-                <stop offset="0%" stop-color="#ff3b00"/>
-                <stop offset="100%" stop-color="#ffe14a"/>
-              </linearGradient>
-            </defs>
-            <circle class="ring-track" cx="60" cy="60" r="46"/>
-            <circle id="heroRingArc" class="ring-val" cx="60" cy="60" r="46"/>
-          </svg>
-          <div class="ring-label">
-            <b id="heroPct">0%</b>
-            <span>SUB-4</span>
-          </div>
-        </div>
-      </article>
-      <article class="stat">
-        <p class="stat-label">VDOT</p>
-        <p class="stat-mid" id="heroVdot">—</p>
-      </article>
-      <article class="stat">
-        <p class="stat-label">本週公里</p>
-        <p class="stat-mid" id="heroWeek">0.0</p>
-      </article>
-      <article class="stat stat-wide">
-        <div class="gap-row">
-          <p class="stat-label" id="heroGapLabel">距 SUB-4</p>
-          <p class="stat-mid" id="heroGap">—</p>
-        </div>
-        <div class="bar" aria-hidden="true"><span id="heroBar"></span></div>
-      </article>
     </div>
   </div>
 </header>
 <nav aria-label="主要">
-  <button type="button" data-tab="log" class="on">
+  <button type="button" data-tab="today" class="on">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7v9H4z"/><path d="M10 20v-6h4v6"/></svg>
+    <span>今日</span>
+  </button>
+  <button type="button" data-tab="log">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3.5h14v17H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
     <span>紀錄</span>
   </button>
@@ -96,7 +58,43 @@
   </button>
 </nav>
 <main>
-<section id="log" class="tab on">
+<section id="today" class="tab on">
+ <div class="card" id="todayWorkout"></div>
+ <div class="stat-board">
+  <article class="stat stat-mara">
+   <div>
+    <p class="stat-label">預測全馬</p>
+    <p class="stat-num" id="heroMara">—</p>
+    <p class="stat-sub">目標 SUB-4 · 42.195 km</p>
+   </div>
+   <div class="ring-wrap" aria-label="SUB-4 進度">
+    <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+     <defs>
+      <linearGradient id="ringFire" x1="0" y1="1" x2="1" y2="0">
+       <stop offset="0%" stop-color="#ff3b00"/>
+       <stop offset="100%" stop-color="#ffe14a"/>
+      </linearGradient>
+     </defs>
+     <circle class="ring-track" cx="60" cy="60" r="46"/>
+     <circle id="heroRingArc" class="ring-val" cx="60" cy="60" r="46"/>
+    </svg>
+    <div class="ring-label"><b id="heroPct">0%</b><span>SUB-4</span></div>
+   </div>
+  </article>
+  <article class="stat stat-wide">
+   <div class="gap-row">
+    <p class="stat-label" id="heroGapLabel">距 SUB-4</p>
+    <p class="stat-mid" id="heroGap">—</p>
+   </div>
+   <div class="bar" aria-hidden="true"><span id="heroBar"></span></div>
+  </article>
+  <article class="stat"><p class="stat-label">VDOT</p><p class="stat-mid" id="heroVdot">—</p></article>
+  <article class="stat"><p class="stat-label">本週公里</p><p class="stat-mid" id="heroWeek">0.0</p></article>
+ </div>
+ <p class="slogan" id="slogan">今天就出門。熱血不等人。</p>
+ <button type="button" id="askToday">問教練關於今天</button>
+</section>
+<section id="log" class="tab">
  <form id="runForm" class="card">
   <p class="kicker">SPLIT</p>
   <h2 id="formTitle">新增跑步</h2>
@@ -109,13 +107,12 @@
   <div class="pace" id="fPace">配速：—</div>
   <div class="row"><button type="submit">儲存</button><button type="button" id="cancelEdit" class="ghost" hidden>取消</button></div>
  </form>
- <div class="card">
-  <p class="kicker">IMPORT</p>
-  <h2>Garmin 匯入</h2>
-  <p class="muted">從 Garmin Connect 匯出 Activities.csv、GPX 或 FIT 檔後上傳（重複的日期＋距離會自動略過）。</p>
+ <details class="advanced">
+  <summary>Garmin 匯入</summary>
+  <p class="muted">從 Garmin Connect 匯出 Activities.csv、GPX 或 FIT 後上傳。重複的日期加距離會略過。</p>
   <label class="filebtn">選擇檔案<input type="file" id="garminFile" accept=".csv,.gpx,.fit" multiple hidden></label>
   <div id="importMsg" class="muted"></div>
- </div>
+ </details>
  <div class="card card-list">
   <p class="kicker">HISTORY</p>
   <h2>跑步紀錄 <span id="runCount" class="muted"></span></h2>
@@ -165,11 +162,10 @@
    <span id="chatSendLabel">送出</span>
   </button>
  </div>
- <div class="card">
-  <p class="kicker">NOTES</p>
-  <h2>訓練提示</h2>
+ <details class="advanced">
+  <summary>訓練提示</summary>
   <div id="tips"></div>
- </div>
+ </details>
  <div class="card">
   <p class="kicker">DATA</p>
   <h2>資料</h2>
