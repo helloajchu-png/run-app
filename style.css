@@ -237,8 +237,30 @@ input,select,textarea{
   border-radius:0;
   color-scheme:dark;
 }
-textarea{resize:vertical;min-height:72px;line-height:1.45}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--fire);outline-offset:1px;border-color:transparent}
+textarea,#chatMsg{
+  -webkit-appearance:none;
+  appearance:none;
+  display:block;
+  width:100%;
+  min-height:168px;
+  resize:vertical;
+  line-height:1.5;
+  background:#161616;
+  background-color:#161616;
+  color:#f4f1ec;
+  border:1px solid #ff6a00;
+  caret-color:#ffe14a;
+}
+#chatMsg::placeholder{color:#9a958c;opacity:1}
+#chatMsg:focus{
+  outline:none;
+  border-color:#ffe14a;
+  box-shadow:0 0 0 2px rgba(255,59,0,.45);
+}
+#chatSend{width:100%;display:block;margin-top:4px;clip-path:none}
+#chatSend:disabled{opacity:.65;cursor:progress}
+.chat-status{min-height:1.2em;margin:0 0 8px;color:#ffb000;font-size:13px}
+input:focus,select:focus{outline:2px solid var(--fire);outline-offset:1px;border-color:transparent}
 .chat-log{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
 .bubble{padding:10px 12px;background:#141414;border-left:3px solid var(--gold)}
 .bubble.user{border-left-color:var(--fire);background:#1c140f}

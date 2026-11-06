@@ -41,10 +41,10 @@
     <li>比賽成績、訓練目標，以及由此算出的體能估計（例如 VDOT、預測完賽時間）與課表。</li>
   </ul>
 
-  <h2>Claude 教練（已啟用）</h2>
-  <p>「教練」頁的問答會把你的問題，以及回答所需的活動上下文，以 HTTPS POST 送到 Cloudflare Worker（run-app-coach.helloajchu.workers.dev/chat）。上下文包括近期跑步、比賽成績、目標、課表摘要，以及 VDOT 與預測。這些內容只用來產生教練回覆。</p>
+  <h2>AI 教練（已啟用）</h2>
+  <p>「教練」頁的問答會把你的問題，以及回答所需的活動上下文，以 HTTPS POST 送到 Cloudflare Worker（run-app-coach.helloajchu.workers.dev/chat）。回覆由 Anthropic Claude 產生。上下文包括近期跑步、比賽成績、目標、課表摘要，以及 VDOT 與預測。這些內容只用來產生教練回覆。</p>
   <ul>
-    <li>Claude 的 API 金鑰只存在 Worker 的秘密設定，不會出現在這個網站，也不會存在你的瀏覽器。</li>
+    <li>Anthropic Claude 的 API 金鑰只存在 Worker 的秘密設定，不會出現在這個網站，也不會存在你的瀏覽器。</li>
     <li>這個頁面不要求你填寫模型金鑰。預設即可使用。</li>
     <li>若你在進階設定改了後端網址，問題與同樣的上下文會改送到該網址。</li>
   </ul>

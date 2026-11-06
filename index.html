@@ -158,13 +158,16 @@
   <div id="tips"></div>
  </div>
  <div class="card">
-  <p class="kicker">CLAUDE</p>
+  <p class="kicker">ASK</p>
   <h2>問教練</h2>
-  <p class="muted">直接問 Claude。不用填金鑰。送出時會附上你的紀錄、比賽、目標、課表摘要與 VDOT。</p>
+  <p class="muted">直接問教練。不用填金鑰。送出時會附上你的紀錄、比賽、目標、課表摘要與 VDOT。</p>
   <div id="chatLog" class="chat-log" aria-live="polite"></div>
-  <label>想問什麼<textarea id="chatMsg" rows="3" maxlength="2000" placeholder="例如：這週的輕鬆跑要跑多慢？"></textarea></label>
-  <button type="button" id="chatSend">送出</button>
-  <div id="chatErr" class="muted"></div>
+  <form id="coachForm">
+   <label for="chatMsg">想問什麼</label>
+   <textarea id="chatMsg" name="message" rows="6" maxlength="2000" placeholder="例如：這週的輕鬆跑要跑多慢？" enterkeyhint="send" autocomplete="off"></textarea>
+   <p id="chatErr" class="chat-status" role="status"></p>
+   <button type="submit" id="chatSend">送出</button>
+  </form>
   <details class="advanced">
    <summary>進階：自訂後端網址</summary>
    <label>後端網址（空白則用預設）<input id="coachUrl" inputmode="url" placeholder="https://run-app-coach.helloajchu.workers.dev" autocomplete="off"></label>
