@@ -446,6 +446,7 @@ td:not(:first-child),th:not(:first-child){font-family:var(--cond);font-variant-n
   #log.tab.on{display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start}
   #log.tab.on .card-list{grid-column:1 / -1}
 }
+.toast{position:fixed;left:12px;right:12px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:40;margin:0;padding:12px 14px;text-align:center;font-weight:700;color:#ffe14a;background:#1a120e;border:1px solid #ff6a00}
 .site-foot{max-width:720px;margin:0 auto;padding:4px 16px 28px;text-align:center}
 .site-foot a,.textlink{color:var(--gold);font-family:var(--cond);letter-spacing:.08em;text-decoration:none}
 .site-foot a:hover,.textlink:hover{text-decoration:underline}

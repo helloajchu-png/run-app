@@ -129,6 +129,21 @@ function coachEndpoint(){const v=($('#coachUrl')&&$('#coachUrl').value||S.get('c
 let chat=[];
 function renderChat(){const el=$('#chatLog');if(!el)return;el.innerHTML=chat.length?chat.map(m=>`<div class="bubble ${m.role}"><span class="who">${m.role==='user'?'你':'教練'}</span><p>${esc(m.text).replace(/\n/g,'<br>')}</p></div>`).join(''):'<p class="muted">問一個具體的問題，例如配速、這週課表或恢復。</p>'}
 let coachBusy=false;
+function coachFail(ex){
+ const j=ex&&ex.body||{}, raw=ex&&ex.raw||'', detail=j.detail||j.error||j.message||'';
+ const blob=`${detail} ${raw} ${ex&&ex.message||''}`;
+ if(!ex.status&&(ex.name==='TypeError'||/failed to fetch|networkerror|load failed|cors/i.test(ex.message||'')))return '網路或跨網域（CORS）連線失敗，請檢查網路後再試';
+ if(/upstream/i.test(blob))return '送出失敗：upstream'+(j.detail?'：'+j.detail:(detail&&!/^upstream$/i.test(String(detail))?'：'+detail:''));
+ return '送出失敗：'+(detail||raw.slice(0,160)||ex.message||('HTTP '+(ex.status||'')));
+}
+async function postChat(message,context){
+ let r;
+ try{r=await fetch(coachEndpoint()+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,context})})}
+ catch(e){e.status=0;throw e}
+ const raw=await r.text();let j={};try{j=JSON.parse(raw)}catch{}
+ if(!r.ok||typeof j.reply!=='string'){const err=new Error(j.error||j.message||raw.slice(0,160)||('HTTP '+r.status));err.status=r.status;err.body=j;err.raw=raw;throw err}
+ return j.reply||'（沒有回覆）';
+}
 async function askCoach(){
  const btn=$('#chatSend'),box=$('#chatMsg'),err=$('#chatErr'),label=$('#chatSendLabel'),spin=$('#chatSpin');
  if(!btn||!box||coachBusy)return;
@@ -142,15 +157,16 @@ async function askCoach(){
  let context='{}';
  try{context=coachContext()}catch(err2){context=JSON.stringify({note:'上下文整理失敗',detail:String(err2)})}
  try{
-  const r=await fetch(coachEndpoint()+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,context})});
-  const raw=await r.text();
-  let j={};try{j=JSON.parse(raw)}catch{}
-  if(!r.ok||typeof j.reply!=='string')throw new Error(j.error||j.message||raw.slice(0,160)||('HTTP '+r.status));
-  pending.text=j.reply||'（沒有回覆）';
+  let reply;try{reply=await postChat(message,context)}catch(ex){
+   if(/upstream/i.test(`${ex.message||''} ${ex.raw||''} ${(ex.body&&(ex.body.error||ex.body.detail))||''}`)){
+    pending.text='上游忙碌，1 秒後重試…';renderChat();await new Promise(r=>setTimeout(r,1000));reply=await postChat(message,context);
+   }else throw ex;
+  }
+  pending.text=reply;
  }catch(ex){
   if(chat[chat.length-1]===pending)chat.pop();
   if(chat[chat.length-1]&&chat[chat.length-1].role==='user')chat.pop();
-  box.value=message;err.textContent='送出失敗：'+ex.message;
+  box.value=message;err.textContent=coachFail(ex);
  }finally{
   coachBusy=false;btn.disabled=false;if(label)label.textContent='送出';if(spin)spin.hidden=true;renderChat();
  }
@@ -209,4 +225,7 @@ function renderHero(){
 }
 function renderAll(){renderLog();renderFit();renderPlan();renderCoach();renderHero();renderToday()}
 renderAll();updPace();
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+const APP_VER='run-app-v9';
+function showToast(msg){let el=$('#toast');if(!el){el=document.createElement('p');el.id='toast';el.className='toast';document.body.appendChild(el)}el.textContent=msg}
+function noteUpdate(){const prev=localStorage.getItem('ra_sw');const back=!!(prev||navigator.serviceWorker?.controller);if(prev!==APP_VER&&back&&sessionStorage.getItem('ra_toasted')!==APP_VER){sessionStorage.setItem('ra_toasted',APP_VER);showToast('已更新，請再試一次')}localStorage.setItem('ra_sw',APP_VER)}
+if('serviceWorker' in navigator){noteUpdate();navigator.serviceWorker.register('sw.js');navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.version)noteUpdate()});navigator.serviceWorker.addEventListener('controllerchange',noteUpdate)}
