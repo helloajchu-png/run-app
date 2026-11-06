@@ -225,18 +225,28 @@ h2{font-size:20px;font-weight:700;margin:0 0 12px;letter-spacing:.02em}
 .card .kicker{margin-bottom:2px}
 
 label{display:block;font-size:13px;color:var(--muted);margin:0 0 10px}
-input,select{
+input,select,textarea{
   width:100%;
   margin-top:6px;
   padding:12px;
   font-size:16px;
+  font-family:inherit;
   color:var(--ink);
   background:#101010;
   border:1px solid #3a3834;
   border-radius:0;
   color-scheme:dark;
 }
-input:focus,select:focus{outline:2px solid var(--fire);outline-offset:1px;border-color:transparent}
+textarea{resize:vertical;min-height:72px;line-height:1.45}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--fire);outline-offset:1px;border-color:transparent}
+.chat-log{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
+.bubble{padding:10px 12px;background:#141414;border-left:3px solid var(--gold)}
+.bubble.user{border-left-color:var(--fire);background:#1c140f}
+.bubble .who{font-family:var(--cond);font-size:11px;letter-spacing:.14em;color:var(--gold)}
+.bubble p{margin:4px 0 0;font-size:14px;line-height:1.55}
+.advanced{margin-top:14px;color:var(--muted);font-size:13px}
+.advanced summary{cursor:pointer;font-family:var(--cond);letter-spacing:.08em;color:var(--gold)}
+.advanced label{margin-top:10px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .row>*{flex:1 1 120px;min-width:0}
 .row>button,.row>.filebtn{width:auto}

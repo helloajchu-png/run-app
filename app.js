@@ -106,12 +106,31 @@ function coachTips(){const T=[];const add=(c,t)=>T.push({c,t});
   const hi=hr.filter(r=>r.avgHr>=165&&r.distanceKm<12).length;if(hi>=3)add('warn',`近 4 週有 ${hi} 次短程跑平均心率 ≥165，強度可能偏高。`)}
  else add('','記錄心率（或匯入 Garmin）可以獲得心率相關建議。');
  return T}
-function renderCoach(){$('#tips').innerHTML=coachTips().map(t=>`<div class="tip ${t.c}">${esc(t.t)}</div>`).join('');const l=S.get('llm',{});$('#llmUrl').value=l.url||'';$('#llmModel').value=l.model||'';$('#llmKey').value=l.key||''}
-$('#saveLlm').onclick=()=>{S.set('llm',{url:$('#llmUrl').value.trim(),model:$('#llmModel').value.trim(),key:$('#llmKey').value.trim()});alert('已儲存')};
-$('#askLlm').onclick=async()=>{const l=S.get('llm',{});if(!l.url||!l.key)return alert('請先設定 API 端點與金鑰');$('#llmOut').textContent='思考中…';
- const ctx={recentRuns:runs.slice(0,30),race:S.get('race',null),goal:S.get('goal',null),ruleTips:coachTips().map(t=>t.t)};
- try{const r=await fetch(l.url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+l.key},body:JSON.stringify({model:l.model||'gpt-4o-mini',messages:[{role:'system',content:'你是專業跑步教練，用繁體中文給出具體、簡短的訓練建議。'},{role:'user',content:JSON.stringify(ctx)}]})});
-  const j=await r.json();$('#llmOut').innerHTML='<div class="tip">'+esc(j.choices?.[0]?.message?.content||JSON.stringify(j)).replace(/\n/g,'<br>')+'</div>'}catch(e){$('#llmOut').textContent='錯誤：'+e.message}};
+const COACH_API='https://run-app-coach.helloajchu.workers.dev';
+function coachContext(){
+ const race=S.get('race',null),goal=S.get('goal',null);
+ const recent=[...runs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30).map(r=>({date:r.date,km:+r.distanceKm.toFixed(2),time:fmtT(r.durationSec),pace:fmtP(r.durationSec/r.distanceKm),hr:r.avgHr||null,note:r.note||'',source:r.source||'manual'}));
+ const b=bestEffort();
+ let fitness=null;
+ if(b){const V=b.v;fitness={basis:b.label,vdot:+V.toFixed(1),predictions:[5,10,21.0975,42.195].map(d=>({dist:DN[d],riegel:fmtT(riegel(b.sec,b.km,d)),vdot:fmtT(vdotTime(V,d)),pace:fmtP(riegel(b.sec,b.km,d)/d)})),paces:{easy:fmtP(paceAt(V,.70)),tempo:fmtP(paceAt(V,.88)),interval:fmtP(paceAt(V,.975)),marathon:fmtP(vdotTime(V,42.195)/42.195)}}}
+ let plan=null;
+ if(goal&&goal.date){const p=genPlan(goal),pred=vdotTime(p.V,goal.dist);
+  plan={goal:{dist:DN[goal.dist]||goal.dist,date:goal.date,time:fmtT(goal.sec),days:+goal.days},weeksOut:p.weeks,predicted:fmtT(pred),vdotNow:+p.V.toFixed(1),vdotNeeded:+p.gV.toFixed(1),paces:{easy:fmtP(p.P.E),goal:fmtP(p.P.G),tempo:fmtP(p.P.T),interval:fmtP(p.P.I)},weeks:p.out.map(w=>({week:w.w,phase:w.phase,km:w.km,days:w.days.map(d=>d[0]+' '+TAG[d[1]][0]+' '+d[2]+' '+fmtP(d[3]))}))}}
+ return JSON.stringify({today:today(),weeklyKmRecentToOlder:weeklyKm(4).map(x=>+x.toFixed(1)),race:race?{dist:DN[race.dist]||race.dist,time:fmtT(race.sec),date:race.date||''}:null,recentRuns:recent,fitness,plan,ruleTips:coachTips().map(t=>t.t)})}
+function coachEndpoint(){const v=($('#coachUrl')&&$('#coachUrl').value||S.get('coachUrl','')||'').trim().replace(/\/+$/,'');return v||COACH_API}
+let chat=[];
+function renderChat(){const el=$('#chatLog');if(!el)return;el.innerHTML=chat.length?chat.map(m=>`<div class="bubble ${m.role}"><span class="who">${m.role==='user'?'你':'教練'}</span><p>${esc(m.text).replace(/\n/g,'<br>')}</p></div>`).join(''):'<p class="muted">問一個具體的問題，例如配速、這週課表或恢復。</p>'}
+$('#chatSend').onclick=async()=>{const message=$('#chatMsg').value.trim();if(!message)return alert('先寫下想問教練的問題');
+ const base=coachEndpoint();chat.push({role:'user',text:message});$('#chatMsg').value='';$('#chatErr').textContent='';
+ const pending={role:'coach',text:'思考中…'};chat.push(pending);renderChat();
+ try{const r=await fetch(base+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,context:coachContext()})});
+  const j=await r.json().catch(()=>({}));if(!r.ok||typeof j.reply!=='string')throw new Error(j.error||j.message||('HTTP '+r.status));pending.text=j.reply||'（沒有回覆）'}
+ catch(e){chat.pop();chat.pop();$('#chatMsg').value=message;$('#chatErr').textContent='送出失敗：'+e.message}
+ renderChat()};
+$('#chatMsg').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#chatSend').click()}});
+$('#saveCoachUrl').onclick=()=>{const v=$('#coachUrl').value.trim();if(v)S.set('coachUrl',v);else localStorage.removeItem('ra_coachUrl');alert(v?'已改用自訂網址':'已恢復預設教練')};
+function renderCoach(){$('#tips').innerHTML=coachTips().map(t=>`<div class="tip ${t.c}">${esc(t.t)}</div>`).join('');
+ const urlEl=$('#coachUrl');if(urlEl&&document.activeElement!==urlEl)urlEl.value=S.get('coachUrl','')||'';renderChat()}
 $('#exportBtn').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({runs,race:S.get('race'),goal:S.get('goal')},null,1)],{type:'application/json'}));a.download='runs.json';a.click()};
 $('#clearBtn').onclick=()=>{if(confirm('清除所有資料？')){['runs','race','goal'].forEach(k=>localStorage.removeItem('ra_'+k));runs=[];renderAll()}};
 

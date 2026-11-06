@@ -158,14 +158,18 @@
   <div id="tips"></div>
  </div>
  <div class="card">
-  <p class="kicker">OPTIONAL</p>
-  <h2>LLM 設定（選用）</h2>
-  <p class="muted">目前使用內建規則。未來可填入 OpenAI 相容 API 端點與金鑰，取得更個人化建議；金鑰只存在本機瀏覽器。</p>
-  <label>API 端點<input id="llmUrl" placeholder="https://api.openai.com/v1/chat/completions"></label>
-  <label>模型<input id="llmModel" placeholder="gpt-4o-mini"></label>
-  <label>API 金鑰<input id="llmKey" type="password"></label>
-  <div class="row"><button id="saveLlm">儲存</button><button id="askLlm" class="ghost">詢問 LLM</button></div>
-  <div id="llmOut"></div>
+  <p class="kicker">CLAUDE</p>
+  <h2>問教練</h2>
+  <p class="muted">直接問 Claude。不用填金鑰。送出時會附上你的紀錄、比賽、目標、課表摘要與 VDOT。</p>
+  <div id="chatLog" class="chat-log" aria-live="polite"></div>
+  <label>想問什麼<textarea id="chatMsg" rows="3" maxlength="2000" placeholder="例如：這週的輕鬆跑要跑多慢？"></textarea></label>
+  <button type="button" id="chatSend">送出</button>
+  <div id="chatErr" class="muted"></div>
+  <details class="advanced">
+   <summary>進階：自訂後端網址</summary>
+   <label>後端網址（空白則用預設）<input id="coachUrl" inputmode="url" placeholder="https://run-app-coach.helloajchu.workers.dev" autocomplete="off"></label>
+   <button type="button" id="saveCoachUrl" class="ghost">儲存網址</button>
+  </details>
  </div>
  <div class="card">
   <p class="kicker">DATA</p>
