@@ -38,29 +38,28 @@ npx wrangler deploy
 - `POST /posts/:id/like` 再按一次取消。
 - CORS 只允許 `https://helloajchu-png.github.io`。
 
-## Garmin Connect（OAuth 1.0a）
+## Garmin Connect（OAuth 2.0 PKCE）
 
-權杖只存在 D1 的 `garmin_oauth`。Consumer Secret 與 access token 不會進到瀏覽器。
+公開規格：Garmin 的 OAuth2.0 PKCE Specification（`developerportal.garmin.com/sites/default/files/OAuth2PKCE.pdf`）。
 
-在 Garmin 開發者入口登錄的 Redirect URI 必須一字不差：
+- 授權：`GET https://connect.garmin.com/oauth2Confirm`
+- 權杖：`POST https://connectapi.garmin.com/di-oauth2-service/oauth/token`
+- 使用者 ID：`GET https://apis.garmin.com/wellness-api/rest/user/id`
+- 解除登記：`DELETE https://apis.garmin.com/wellness-api/rest/user/registration`
+
+Starter 是 Push only，不含歷史資料（`developer.garmin.com/gc-developer-program`）。這個 Worker 不做歷史下載。`POST /garmin/sync` 回 501。推送本文格式不在上述公開 PDF，因此沒有推送解析。
+
+在 Garmin 表單的 OAuth redirect URL 必須一字不差（含結尾斜線）：
 
 `https://helloajchu-png.github.io/run-app/`
 
-部署這個 Worker 之後，在 `worker/` 目錄設定密鑰（終端機會問值，不要寫進檔案）：
+App 建立並部署這個 Worker 之後，在 `worker/` 設定密鑰（不要寫進檔案）：
 
 ```bash
 npx wrangler secret put GARMIN_CONSUMER_KEY
 npx wrangler secret put GARMIN_CONSUMER_SECRET
 ```
 
-密鑰還沒設時，`POST /garmin/start` 回 503，訊息是「尚未設定 GARMIN_CONSUMER_KEY / GARMIN_CONSUMER_SECRET」。App 只顯示這句，不會當掉。
+`GARMIN_CONSUMER_KEY` 是 OAuth client_id，`GARMIN_CONSUMER_SECRET` 是 client_secret。尚未建立 App 之前沒有這兩組值。密鑰未設定時，`POST /garmin/start` 回 503。
 
-端點（基底 `https://run-app-api.helloajchu.workers.dev`）：
-
-- `POST /garmin/start` `{sid}` → `{authorizeUrl}`
-- `POST /garmin/complete` `{sid, oauth_token, oauth_verifier}` → `{connected:true}`
-- `POST /garmin/status` `{sid}` → `{connected}`
-- `POST /garmin/sync` `{sid}` → `{runs}`（最近 14 天內上傳的跑步）
-- `POST /garmin/disconnect` `{sid}`
-
-瀏覽器只保存 `sid`（`localStorage` 的 `ra_garmin_sid`）。同步下來的活動寫進跟手動紀錄同一份本機紀錄。
+這個 Worker 目前還沒有部署到 `https://run-app-api.helloajchu.workers.dev`。

@@ -40,10 +40,12 @@ CREATE TABLE IF NOT EXISTS posts (
 
 CREATE TABLE IF NOT EXISTS garmin_oauth (
   sid TEXT PRIMARY KEY,
-  request_token TEXT,
-  request_secret TEXT,
+  state TEXT UNIQUE,
+  code_verifier TEXT,
   access_token TEXT,
-  access_secret TEXT,
+  refresh_token TEXT,
+  expires_at TEXT,
+  garmin_user_id TEXT,
   updated_at TEXT NOT NULL
 );
 

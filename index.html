@@ -114,12 +114,12 @@
  <div class="card" id="garminConnect">
   <p class="kicker">CONNECT</p>
   <h2>連結 Garmin</h2>
-  <p id="garminState" class="muted">尚未連結</p>
+  <p id="garminState" class="muted">尚未連結。授權完成前不會讀取 Garmin 活動，也不會補連結前的歷史。</p>
   <div class="row">
    <button type="button" id="garminLink">連結 Garmin</button>
-   <button type="button" id="garminSync" class="ghost" hidden>同步最近活動</button>
    <button type="button" id="garminUnlink" class="ghost" hidden>解除連結</button>
   </div>
+  <label class="checkline"><input type="checkbox" id="garminCoachOk"> 我同意之後問教練時附上來源為 Garmin 的紀錄（預設不含；可隨時取消）</label>
   <p id="garminMsg" class="chat-status" role="status"></p>
  </div>
  <details class="advanced">

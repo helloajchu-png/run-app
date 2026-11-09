@@ -28,7 +28,7 @@
       <h1>隱私權政策</h1>
     </span>
   </a>
-  <p class="muted">跑步教練 · 更新日期：2026年11月6日</p>
+  <p class="muted">跑步教練 · 更新日期：2026年11月9日</p>
   <div class="sheen" aria-hidden="true"></div>
 
   <p>跑步教練是個人興趣製作的網頁應用（PWA），用來記錄跑步、估計體能並安排課表。這不是商業服務，不向使用者收費，也沒有帳號系統。</p>
@@ -41,25 +41,41 @@
     <li>比賽成績、訓練目標，以及由此算出的體能估計（例如 VDOT、預測完賽時間）與課表。</li>
   </ul>
 
-  <h2>AI 教練（已啟用）</h2>
-  <p>「教練」頁的問答會把你的問題，以及回答所需的活動上下文，以 HTTPS POST 送到 Cloudflare Worker（run-app-coach.helloajchu.workers.dev/chat）。回覆由 Anthropic Claude 產生。上下文包括近期跑步、比賽成績、目標、課表摘要，以及 VDOT 與預測。這些內容只用來產生教練回覆。</p>
+  <h2>AI 教練（已啟用，每次都要你按送出）</h2>
+  <p>「教練」頁的問答是選用功能。只有你按下「送出」時，瀏覽器才會把該次問題，以及回答所需的活動上下文，以 HTTPS POST 送到已上線的 Cloudflare Worker（run-app-coach.helloajchu.workers.dev/chat）。回覆由 Anthropic 的模型產生。上下文預設來自你手動輸入或檔案匯入、存在這台瀏覽器的紀錄、比賽成績、目標與課表。來源標記為 Garmin 的紀錄預設不附上。</p>
+  <h2>AI 透明度聲明</h2>
   <ul>
-    <li>Anthropic Claude 的 API 金鑰只存在 Worker 的秘密設定，不會出現在這個網站，也不會存在你的瀏覽器。</li>
-    <li>這個頁面不要求你填寫模型金鑰。預設即可使用。</li>
-    <li>若你在進階設定改了後端網址，問題與同樣的上下文會改送到該網址。</li>
+    <li>問教練不是自動執行。不按「送出」就不會把紀錄送到教練 Worker。</li>
+    <li>若你在「紀錄」勾選「我同意之後問教練時附上來源為 Garmin 的紀錄」，之後的問答才會帶上那些紀錄。取消勾選立即生效，之後的問答不再附上。這項同意存在這台瀏覽器，預設是關閉。</li>
+    <li>Garmin 活動以及由它算出的內容，不會被我們用來訓練、評估或改進任何模型，也不會出售或交給資料仲介。我們不授權他人用這些資料訓練模型。</li>
+    <li>Anthropic 只在你按下送出的那一次收到該次問題與上下文，用來產生回覆。Anthropic 的 API 金鑰只在教練 Worker 的秘密設定，不在這個網頁裡。</li>
   </ul>
 
-  <h2>Garmin 連線（已啟用）</h2>
-  <p>「紀錄」頁的連結 Garmin 使用 OAuth 1.0a。Garmin Consumer Key、Consumer Secret，以及你的 access token，只存在 Cloudflare Worker（run-app-api）的密鑰與 D1。瀏覽器只留一組工作階段編號，用來請 Worker 代為同步。同步下來的活動只寫進你自己的跑步紀錄（日期、距離、時間、心率），不會公開到社群，也不會拿去出售。</p>
+  <h2>Garmin 連線（尚未接通）</h2>
+  <p>手動匯出的 Activities.csv、GPX 或 FIT 是在你的瀏覽器裡解析，寫進這台裝置的紀錄，不會因此連上 Garmin 帳號。「連結 Garmin」按鈕準備走 OAuth 2.0 PKCE，但 run-app-api 這個 Worker 尚未部署，也還沒有 Garmin 應用程式金鑰，所以現在按下去不會登入 Garmin，也不會下載任何歷史活動。Starter 方案公開說明是只推送新活動、不含歷史資料；推送內容的欄位格式不在公開的 OAuth 規格裡，因此這個網站還沒有接收端。</p>
+  <p>若日後 Worker 部署完成且你完成授權，Garmin 的 client id、client secret、access token 與 refresh token 只會放在該 Worker 與 Cloudflare D1。瀏覽器只留一組工作階段編號。解除連結會要求 Worker 刪除該筆權杖；在 Worker 上線前，解除連結只清掉這台裝置上的編號。</p>
 
   <h2>社群（好友限定）</h2>
   <p>「社群」預設只有好友看得到顯示名稱、本週公里、平均配速、目標賽、你選填的下週計畫，以及你紀錄跑步或分享本週時產生的動態。按讚也只在好友之間。在社群伺服器上線前，這些資料只存在這台裝置。上線後，暱稱與 PIN 的雜湊會存在 Cloudflare D1，PIN 原文不會保存。我們不把社群動態公開給陌生人。</p>
 
+  <h2>誰會碰到資料</h2>
+  <ul>
+    <li>GitHub Pages：現在就在託管這個靜態網站與圖示。它收到的是網頁檔案，不是你的跑步紀錄。</li>
+    <li>Cloudflare：教練問答的 Worker（run-app-coach）已上線，只在你按送出時收到該次內容。社群與 Garmin 用的 run-app-api 與 D1 尚未部署，現在沒有把暱稱、PIN 或 Garmin 權杖送到那裡。</li>
+    <li>Anthropic：只在你按送出時，經由教練 Worker 產生回覆。見上面的透明度聲明。</li>
+    <li>Garmin：只有在你日後於他們的頁面完成授權，才會依該次同意處理你的 Garmin 帳號。現在尚未接通。</li>
+  </ul>
+
   <h2>我們不出售資料</h2>
-  <p>我們不出售個人資料，也不把你的跑步紀錄用於廣告或提供給資料仲介。</p>
+  <p>我們不出售個人資料，也不把你的跑步紀錄或 Garmin 活動賣給第三方，不用於廣告或資料仲介。</p>
 
   <h2>你的控制</h2>
-  <p>可在 App「教練」頁清除全部資料，或用瀏覽器清除此網站的網站資料。清除後，存在這台裝置上的紀錄會一併刪除。</p>
+  <ul>
+    <li>查看與更正：紀錄列表可以編輯每一筆手動或檔案匯入的跑步。</li>
+    <li>匯出：教練頁的「匯出 JSON」會下載這台瀏覽器裡的紀錄、比賽與目標。</li>
+    <li>刪除：可以刪單筆，或在教練頁「清除全部」。清除瀏覽器裡這個網站的資料也會刪掉本機紀錄與社群示範資料。</li>
+    <li>撤回 Garmin 同意：取消「附上 Garmin 紀錄」勾選，之後的教練問答就不再附上。Worker 上線後，「解除連結」會請 Worker 呼叫 Garmin 的解除登記並刪掉伺服器上的權杖。現在 Worker 未上線，解除連結只清掉這台裝置的工作階段編號。</li>
+  </ul>
 
   <h2>聯絡</h2>
   <p>對這份政策或資料處理有問題，請寄到 <a href="mailto:helloajchu@gmail.com">helloajchu@gmail.com</a>。</p>

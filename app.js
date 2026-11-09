@@ -116,6 +116,10 @@ function coachTips(){const T=[];const add=(c,t)=>T.push({c,t});
  return T}
 const COACH_API='https://run-app-coach.helloajchu.workers.dev';
 function coachContext(){
+ const allow=localStorage.getItem('ra_garmin_coach_ok')==='1';
+ const kept=runs;
+ if(!allow) runs=runs.filter(r=>r.source!=='garmin');
+ try{
  const race=S.get('race',null),goal=S.get('goal',null);
  const recent=[...runs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30).map(r=>({date:r.date,km:+r.distanceKm.toFixed(2),time:fmtT(r.durationSec),pace:fmtP(r.durationSec/r.distanceKm),hr:r.avgHr||null,note:r.note||'',source:r.source||'manual'}));
  const b=bestEffort();
@@ -124,7 +128,9 @@ function coachContext(){
  let plan=null;
  if(goal&&goal.date){const p=genPlan(goal),pred=vdotTime(p.V,goal.dist);
   plan={goal:{dist:DN[goal.dist]||goal.dist,date:goal.date,time:fmtT(goal.sec),days:+goal.days},weeksOut:p.weeks,predicted:fmtT(pred),vdotNow:+p.V.toFixed(1),vdotNeeded:+p.gV.toFixed(1),paces:{easy:fmtP(p.P.E),goal:fmtP(p.P.G),tempo:fmtP(p.P.T),interval:fmtP(p.P.I)},weeks:p.out.map(w=>({week:w.w,phase:w.phase,km:w.km,days:w.days.map(d=>d[0]+' '+TAG[d[1]][0]+' '+d[2]+' '+fmtP(d[3]))}))}}
- return JSON.stringify({today:today(),weeklyKmRecentToOlder:weeklyKm(4).map(x=>+x.toFixed(1)),race:race?{dist:DN[race.dist]||race.dist,time:fmtT(race.sec),date:race.date||''}:null,recentRuns:recent,fitness,plan,ruleTips:coachTips().map(t=>t.t)})}
+ return JSON.stringify({today:today(),weeklyKmRecentToOlder:weeklyKm(4).map(x=>+x.toFixed(1)),garminIncluded:allow,race:race?{dist:DN[race.dist]||race.dist,time:fmtT(race.sec),date:race.date||''}:null,recentRuns:recent,fitness,plan,ruleTips:coachTips().map(t=>t.t)});
+ }finally{runs=kept}
+}
 function coachEndpoint(){const v=($('#coachUrl')&&$('#coachUrl').value||S.get('coachUrl','')||'').trim().replace(/\/+$/,'');return v||COACH_API}
 let chat=[];
 function renderChat(){const el=$('#chatLog');if(!el)return;el.innerHTML=chat.length?chat.map(m=>`<div class="bubble ${m.role}"><span class="who">${m.role==='user'?'你':'教練'}</span><p>${esc(m.text).replace(/\n/g,'<br>')}</p></div>`).join(''):'<p class="muted">問一個具體的問題，例如配速、這週課表或恢復。</p>'}
@@ -225,7 +231,7 @@ function renderHero(){
 }
 function renderAll(){renderLog();renderFit();renderPlan();renderCoach();renderHero();renderToday()}
 renderAll();updPace();
-const APP_VER='run-app-v11';
+const APP_VER='run-app-v12';
 function showToast(msg){let el=$('#toast');if(!el){el=document.createElement('p');el.id='toast';el.className='toast';document.body.appendChild(el)}el.textContent=msg}
 function noteUpdate(){const prev=localStorage.getItem('ra_sw');const back=!!(prev||navigator.serviceWorker?.controller);if(prev!==APP_VER&&back&&sessionStorage.getItem('ra_toasted')!==APP_VER){sessionStorage.setItem('ra_toasted',APP_VER);showToast('已更新，請再試一次')}localStorage.setItem('ra_sw',APP_VER)}
 if('serviceWorker' in navigator){noteUpdate();navigator.serviceWorker.register('sw.js');navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.version)noteUpdate()});navigator.serviceWorker.addEventListener('controllerchange',noteUpdate)}
