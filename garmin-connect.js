@@ -11,8 +11,8 @@ function sid() {
 }
 function setGarminUi(connected) {
   gid('garminState').textContent = connected
-    ? '已連結。Starter 不會匯入連結前的舊活動。'
-    : '尚未連結。按下去只會開始授權；伺服器未部署時不會連上 Garmin。';
+    ? '已連結。Garmin 會在你上傳新活動後自動送進來。連結前的舊活動不會補進。'
+    : '尚未連結。完成授權後，新活動才會由 Garmin 送進來。';
   gid('garminLink').hidden = connected;
   gid('garminUnlink').hidden = !connected;
 }
@@ -21,11 +21,18 @@ async function garminPost(path, body) {
   try {
     res = await fetch(GARMIN_API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   } catch {
-    throw new Error('Garmin 伺服器尚未部署或無法連線。這不會影響手動紀錄。');
+    throw new Error('無法連上 Garmin 服務。手動紀錄不受影響。');
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
   return data;
+}
+async function pullInbox() {
+  const id = localStorage.getItem(SID_KEY);
+  if (!id || !window.importGarminRuns) return;
+  const data = await garminPost('/garmin/inbox', { sid: id });
+  const merged = window.importGarminRuns(data.runs || []);
+  if (merged.added) gid('garminMsg').textContent = `新活動 ${merged.added} 筆已加入紀錄`;
 }
 async function refreshGarmin() {
   const id = localStorage.getItem(SID_KEY);
@@ -33,6 +40,7 @@ async function refreshGarmin() {
   try {
     const data = await garminPost('/garmin/status', { sid: id });
     setGarminUi(!!data.connected);
+    if (data.connected) await pullInbox();
   } catch (err) {
     setGarminUi(false);
     gid('garminMsg').textContent = err.message;

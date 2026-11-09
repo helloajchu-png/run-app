@@ -88,6 +88,87 @@ async function bearer(env, row) {
   return data.access_token;
 }
 
+function activityTypeKey(activity) {
+  const type = activity.activityType;
+  if (typeof type === 'string') return type;
+  if (type && typeof type === 'object') return String(type.typeKey || type.typeId || '');
+  return '';
+}
+
+function toRun(activity) {
+  const start = Number(activity.startTimeInSeconds);
+  const offset = Number(activity.startTimeOffsetInSeconds) || 0;
+  const meters = Number(activity.distanceInMeters);
+  const sec = Number(activity.durationInSeconds);
+  const kind = `${activityTypeKey(activity)} ${activity.activityName || ''}`;
+  if (!start || !(meters > 0) || !(sec > 0) || !/run|jog|trail|treadmill|track/i.test(kind)) return null;
+  const local = new Date((start + offset) * 1000);
+  const p = n => String(n).padStart(2, '0');
+  const hr = Number(activity.averageHeartRateInBeatsPerMinute);
+  return {
+    summaryId: String(activity.summaryId || activity.activityId || `${start}|${meters}|${sec}`),
+    activityId: activity.activityId || activity.summaryId || null,
+    date: `${local.getUTCFullYear()}-${p(local.getUTCMonth() + 1)}-${p(local.getUTCDate())}`,
+    distanceKm: Math.round(meters / 10) / 100,
+    durationSec: Math.round(sec),
+    avgHr: hr > 0 ? Math.round(hr) : null,
+    note: activity.activityName ? String(activity.activityName).slice(0, 80) : '',
+    source: 'garmin',
+  };
+}
+
+// userId on push/ping items is stated in Garmin's OAuth2 PKCE PDF.
+// Other property names are read only when present. They are not listed on the
+// public Activity API page checked on 2026-11-09. A callbackURL without a
+// summary is a ping; Starter is push-only, so it is not fetched.
+export function runsFromPush(body) {
+  const items = [];
+  const lists = Array.isArray(body) ? [body] : (body && typeof body === 'object' ? Object.values(body) : []);
+  for (const value of lists) {
+    if (Array.isArray(value)) items.push(...value.filter(item => item && typeof item === 'object'));
+  }
+  const runs = [];
+  let ping = 0;
+  let skipped = 0;
+  for (const item of items) {
+    if (item.callbackURL && item.distanceInMeters == null && item.durationInSeconds == null) { ping++; continue; }
+    if (!item.userId) { skipped++; continue; }
+    const run = toRun(item);
+    if (!run) { skipped++; continue; }
+    runs.push({ userId: String(item.userId), ...run });
+  }
+  return { runs, ping, skipped, received: items.length };
+}
+
+async function storePushedRuns(env, parsed) {
+  const db = database(env);
+  let stored = 0;
+  let unmatched = 0;
+  for (const run of parsed.runs) {
+    const owner = await db.prepare('SELECT sid FROM garmin_oauth WHERE garmin_user_id=?').bind(run.userId).first();
+    if (!owner) { unmatched++; continue; }
+    const result = await db.prepare(`INSERT OR IGNORE INTO garmin_activities
+      (id, garmin_user_id, summary_id, activity_date, distance_km, duration_sec, avg_hr, note, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+      crypto.randomUUID(), run.userId, run.summaryId, run.date, run.distanceKm, run.durationSec, run.avgHr, run.note, new Date().toISOString()
+    ).run();
+    if (result && result.meta && result.meta.changes) stored++;
+  }
+  return { ok: true, stored, unmatched, ping: parsed.ping, skipped: parsed.skipped, received: parsed.received };
+}
+
+async function storedRuns(env, sid) {
+  const row = await database(env).prepare('SELECT access_token, garmin_user_id FROM garmin_oauth WHERE sid=?').bind(sid).first();
+  if (!row || !row.access_token) fail('尚未連結 Garmin', 401);
+  if (!row.garmin_user_id) return { connected: true, runs: [] };
+  const rows = await database(env).prepare(`SELECT summary_id, activity_date, distance_km, duration_sec, avg_hr, note
+    FROM garmin_activities WHERE garmin_user_id=? ORDER BY activity_date DESC LIMIT 100`).bind(row.garmin_user_id).all();
+  const runs = (rows.results || []).map(r => ({
+    activityId: r.summary_id, date: r.activity_date, distanceKm: r.distance_km, durationSec: r.duration_sec, avgHr: r.avg_hr, note: r.note || '', source: 'garmin',
+  }));
+  return { connected: true, runs };
+}
+
 export async function handleGarmin(request, env, url) {
   const db = database(env);
   const body = request.method === 'GET' ? {} : await request.json().catch(() => ({}));
@@ -149,8 +230,12 @@ export async function handleGarmin(request, env, url) {
     return { connected: false };
   }
 
-  if (url.pathname === '/garmin/sync' && request.method === 'POST') {
-    fail('Starter 方案沒有歷史活動可下載。公開說明是 Push only，而且不含 Historical Data。推送內容的欄位只在登入後的 API Tools，這裡不接收未公開的格式。', 501);
+  if (url.pathname === '/garmin/push' && request.method === 'POST') {
+    return storePushedRuns(env, runsFromPush(body));
+  }
+
+  if ((url.pathname === '/garmin/inbox' || url.pathname === '/garmin/sync') && request.method === 'POST') {
+    return storedRuns(env, sidOf(body));
   }
 
   fail('找不到', 404);

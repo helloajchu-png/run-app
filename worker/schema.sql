@@ -49,6 +49,19 @@ CREATE TABLE IF NOT EXISTS garmin_oauth (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS garmin_activities (
+  id TEXT PRIMARY KEY,
+  garmin_user_id TEXT NOT NULL,
+  summary_id TEXT NOT NULL,
+  activity_date TEXT NOT NULL,
+  distance_km REAL NOT NULL,
+  duration_sec INTEGER NOT NULL,
+  avg_hr INTEGER,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (garmin_user_id, summary_id)
+);
+
 CREATE TABLE IF NOT EXISTS likes (
   post_id TEXT NOT NULL REFERENCES posts(id),
   user_id TEXT NOT NULL REFERENCES users(id),
