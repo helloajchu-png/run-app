@@ -469,6 +469,27 @@ body.legal{padding-bottom:32px}
 .legal-wrap ul{margin:0 0 12px;padding-left:1.2em}
 .legal-wrap li{margin:0 0 6px;font-size:15px;line-height:1.7}
 .legal-wrap a{color:var(--gold)}
+body.locked{padding-bottom:0}
+body.locked .hero,body.locked nav,body.locked main,body.locked .site-foot{display:none}
+#authGate{display:none}
+body.locked #authGate{
+  display:block;
+  min-height:100vh;
+  padding:calc(32px + env(safe-area-inset-top)) 18px 48px;
+  background:
+    radial-gradient(120% 55% at 100% 0%, rgba(255,59,0,.2), transparent 52%),
+    repeating-linear-gradient(-22deg, rgba(255,255,255,.018) 0 1px, transparent 1px 12px),
+    var(--bg);
+}
+.auth-card{max-width:420px;margin:0 auto}
+.auth-card h1{font-size:28px}
+.auth-card h2{font-family:var(--sans);font-size:32px;margin:8px 0}
+.auth-lead{font-size:16px;line-height:1.65;margin:0 0 16px}
+#authGate button{width:100%;margin-top:8px}
+.whoami{margin:6px 0 0;color:var(--muted);font-size:13px}
+.locknote{padding:12px 12px 12px 14px;background:#241611;border-left:4px solid var(--fire);line-height:1.65;font-size:15px}
+.athlete{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+.athlete b{font-weight:700}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none !important;transition:none !important}
 }

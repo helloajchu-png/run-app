@@ -1,44 +1,61 @@
 # run-app-api
 
 已部署：https://run-app-api.helloajchu.workers.dev  
-`/health` 回 `{"ok":true,"mode":"d1","garmin":true}`。  
+`/health` 回 `{"ok":true,"mode":"d1","garmin":true,"auth":true}`。  
 D1 `run-app` 的 database_id 是 `00ce5642-5c60-4355-868a-49924791dea9`。
 
 教練 Worker 維持獨立，不要改它：`https://run-app-coach.helloajchu.workers.dev`。
 
-## Aj 在 Cloudflare 要做的事
+## 部署
 
-1. 安裝並登入 Wrangler（需有 `helloajchu` 帳號權限）。
-2. 在 repo 的 `worker/` 目錄：
+換到 Cloudflare Pages 這次不要改 D1，不要執行 `wrangler d1 migrations apply`。
 
-```bash
-npx wrangler d1 create run-app
-```
-
-把印出的 `database_id` 寫進 `worker/wrangler.toml` 的 `database_id`。
-
-3. 建立資料表：
+在 `worker/` 只更新程式（保留已設定的變數與密鑰）：
 
 ```bash
-npx wrangler d1 execute run-app --remote --file=schema.sql
+npx wrangler deploy --keep-vars
 ```
 
-4. 部署：
+`--keep-vars` 會留下已經在 Cloudflare 上的變數和密鑰。部署後確認 `/health` 的 `auth` 是 `true`。這次沒有資料表變更。
+
+本機測試（Node 22，不用安裝套件）：
 
 ```bash
-npx wrangler deploy
+npm test
 ```
 
-確認 `https://run-app-api.helloajchu.workers.dev/health` 回 `{"ok":true,"mode":"d1"}`。
+## 密鑰與變數
 
-## 行為
+沒有新的密鑰。密碼雜湊在 Worker 裡用 WebCrypto 計算，不需要 pepper。
 
-- 暱稱 + 4 位數 PIN。PIN 以 PBKDF2 雜湊存在 D1，不存原文。
-- `visibility` 固定 `friends`。動態只給自己與雙向好友。
-- `POST /friends` 用暱稱互相加為好友。
-- `POST /posts` 的 `kind` 為 `run` 或 `week`。
-- `POST /posts/:id/like` 再按一次取消。
-- CORS 只允許 `https://helloajchu-png.github.io`。
+已經設定、不要寫進檔案的密鑰：
+
+```bash
+npx wrangler secret put GARMIN_CONSUMER_KEY
+npx wrangler secret put GARMIN_CONSUMER_SECRET
+```
+
+`GARMIN_CONSUMER_KEY` 是 OAuth client_id，`GARMIN_CONSUMER_SECRET` 是 client_secret。未設定時，`POST /garmin/start` 回 503。
+
+CORS 預設同時允許：
+
+- `https://helloajchu-png.github.io`
+- `https://run-together.pages.dev`
+- `https://run-together-app.pages.dev`（專案名稱被占用時的備援）
+
+選用變數（不是密鑰）：`ALLOWED_ORIGIN`。設了會加進上面的清單，不會拿掉預設來源。不要把密鑰放進 `wrangler.toml`。
+
+## 帳號行為
+
+- `POST /auth/register`、`POST /auth/login`：電子郵件會轉成小寫。密碼以 PBKDF2-SHA256、100,000 次、每人 16 byte 鹽值雜湊，不存原文。
+- 登入與註冊依 IP 限流（登入 15 分鐘 10 次，註冊 1 小時 5 次）。
+- 工作階段權杖是隨機值，D1 只存 SHA-256。大約 400 天到期。`POST /auth/logout` 刪掉這一個。`POST /auth/change-password` 刪掉其他裝置的工作階段。
+- `POST /auth/delete-account` 要目前密碼。會刪掉該帳號的紀錄、設定、動態、工作階段，以及這個帳號的 Garmin 權杖。
+- `GET /sync`、`PUT /sync` 只碰到登入者自己的跑步、比賽、目標、課表勾選、教練網址與下週計畫。跑步以 client id 更新；同一天、距離四捨五入到 0.05 公里視作同一筆。`mode:"merge"` 只補上還沒有的紀錄，不刪舊的。
+- `GET /me`、`PUT /me`：顯示名稱，以及 `isPublic`（預設關閉）。
+- `GET /feed`：未公開的人拿不到別人的動態、週跑量或配速。公開的人只看得到其他 `is_public` 的帳號。關掉公開後，下一次讀取就看不到。
+
+舊的暱稱加 PIN 資料表（`users`、`sessions`、`friends`、`posts`、`likes`）留著，這支 API 不再用它們登入。
 
 ## Garmin Connect（OAuth 2.0 PKCE）
 
@@ -49,33 +66,20 @@ npx wrangler deploy
 - 使用者 ID：`GET https://apis.garmin.com/wellness-api/rest/user/id`
 - 解除登記：`DELETE https://apis.garmin.com/wellness-api/rest/user/registration`
 
-Starter 是 Push only，不含歷史資料（`developer.garmin.com/gc-developer-program`）。`POST /garmin/sync` 與 `POST /garmin/inbox` 只讀已經推進 D1 的活動，不會向 Garmin 拉歷史。
+權杖和 Garmin user id 寫在 `garmin_oauth.user_id`，跟著帳號走。另一台裝置登入同一個帳號後，`POST /garmin/status` 就是已連結，`POST /garmin/inbox` 讀得到已推進來的跑步。推送網址不要改，Garmin 已經登記：
+
+`https://run-app-api.helloajchu.workers.dev/garmin/push`
+
+OAuth redirect URI 也不要改，Garmin 登記的是（含結尾斜線）：
+
+`https://helloajchu-png.github.io/run-app/`
+
+授權完成後，Garmin 仍把瀏覽器送回這個舊網址，並在 query 帶 `code` 與 `state`。換址用的 GitHub Pages 轉址頁會把這兩個值放進新網站的 fragment，新網站再呼叫 `/garmin/complete`。權杖交換送出的 `redirect_uri` 維持上面這個舊網址，所以 Garmin 開發者後台不用改。若以後要讓 Garmin 直接導回 Pages，必須先在後台新增完全一樣的 `https://run-together.pages.dev/`，才能改程式裡的 `CALLBACK`。
+
+`POST /garmin/push` 不需登入。只留下跑步；有對到帳號時，同時寫進該帳號的 `user_runs`。Starter 是 Push only，不含歷史資料。`callbackURL` 這種 ping 只略過，不會再去拉資料。
 
 在 Garmin 表單的 OAuth redirect URL 必須一字不差（含結尾斜線）：
 
 `https://helloajchu-png.github.io/run-app/`
 
-App 建立並部署這個 Worker 之後，在 `worker/` 設定密鑰（不要寫進檔案）：
-
-```bash
-npx wrangler secret put GARMIN_CONSUMER_KEY
-npx wrangler secret put GARMIN_CONSUMER_SECRET
-```
-
-`GARMIN_CONSUMER_KEY` 是 OAuth client_id，`GARMIN_CONSUMER_SECRET` 是 client_secret。尚未建立 App 之前沒有這兩組值。密鑰未設定時，`POST /garmin/start` 回 503。
-
-這個 Worker 已部署。密鑰 `GARMIN_CONSUMER_KEY` 與 `GARMIN_CONSUMER_SECRET` 已在 Cloudflare 設定，不在 repo。
-
-活動還不會自動進來，直到 Aj 在 Garmin API Tools 把 Push 網址設成：
-
-`https://run-app-api.helloajchu.workers.dev/garmin/push`
-
-資料類型選 Activity 的活動摘要（Activities），傳送方式選 Push，不要選 Ping，也不要開歷史 backfill。公開的 Activity API 頁只寫 Push only、不含 Historical Data，沒有列出 JSON 欄位；接收端只使用 OAuth 規格寫明的 `userId`，其餘欄位有出現才讀。`callbackURL` 這種 ping 只回 200，不會再去拉資料。
-
-已連結的 App 會呼叫 `POST /garmin/inbox`，把 D1 裡新存的跑步併進本機紀錄（以日期加距離去重）。
-
-若 `garmin_activities` 還沒建，在 `worker/` 執行：
-
-```bash
-npx wrangler d1 execute run-app --remote --file=migrations/001_garmin_activities.sql
-```
+以前用瀏覽器 `sid` 連過、還沒綁帳號的列，可以在登入後由 `POST /garmin/claim` 認領一次。已經屬於別的帳號的列不能被抢走。
