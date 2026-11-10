@@ -195,12 +195,16 @@ test('a private user sees nobody else, and a public user sees only public users'
   });
 });
 
-test('CORS stays on the GitHub Pages origin', async () => {
+test('CORS allows GitHub Pages and Cloudflare Pages', async () => {
   await withEnv(async env => {
     const evil = await call(env, '/health', { headers: { Origin: 'https://evil.example' } });
     assert.equal(evil.headers.get('Access-Control-Allow-Origin'), 'https://helloajchu-png.github.io');
     const pages = await call(env, '/health', { headers: { Origin: 'https://helloajchu-png.github.io' } });
     assert.equal(pages.headers.get('Access-Control-Allow-Origin'), 'https://helloajchu-png.github.io');
+    const next = await call(env, '/health', { headers: { Origin: 'https://run-together.pages.dev' } });
+    assert.equal(next.headers.get('Access-Control-Allow-Origin'), 'https://run-together.pages.dev');
+    const fallback = await call(env, '/health', { headers: { Origin: 'https://run-together-app.pages.dev' } });
+    assert.equal(fallback.headers.get('Access-Control-Allow-Origin'), 'https://run-together-app.pages.dev');
     assert.equal(pages.data.auth, true);
     env.ALLOWED_ORIGIN = 'https://preview.example';
     const preview = await call(env, '/health', { headers: { Origin: 'https://preview.example' } });
@@ -229,7 +233,9 @@ test('Garmin connection is stored on the account and follows a new login', async
 
       const start = await call(env, '/garmin/start', { method: 'POST', token: owner.token, body: {} });
       assert.equal(start.status, 200);
-      const state = new URL(start.data.authorizeUrl).searchParams.get('state');
+      const authorize = new URL(start.data.authorizeUrl);
+      assert.equal(authorize.searchParams.get('redirect_uri'), 'https://helloajchu-png.github.io/run-app/');
+      const state = authorize.searchParams.get('state');
       const done = await call(env, '/garmin/complete', { method: 'POST', token: owner.token, body: { code: 'auth-code', state } });
       assert.equal(done.status, 200);
       assert.equal(done.data.connected, true);

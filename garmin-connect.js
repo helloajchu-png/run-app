@@ -31,12 +31,24 @@ async function refreshGarmin() {
     gid('garminMsg').textContent = err.message;
   }
 }
-async function finishGarminReturn() {
+function oauthReturn() {
   const params = new URLSearchParams(location.search);
-  const code = params.get('code');
-  const state = params.get('state');
-  if (!code && !state) return;
-  history.replaceState({}, '', location.pathname);
+  const queryCode = params.get('code');
+  const queryState = params.get('state');
+  if (queryCode || queryState) return { code: queryCode, state: queryState, fromQuery: true };
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('ra_oauth_return') || 'null');
+    if (saved && saved.code && saved.state) return { code: saved.code, state: saved.state, fromQuery: false };
+  } catch { /* ignore a bad handoff */ }
+  return null;
+}
+async function finishGarminReturn() {
+  const found = oauthReturn();
+  if (!found) return;
+  if (found.fromQuery) history.replaceState({}, '', location.pathname);
+  sessionStorage.removeItem('ra_oauth_return');
+  const code = found.code;
+  const state = found.state;
   if (!code || !state) { gid('garminMsg').textContent = 'Garmin 沒有完成授權'; return; }
   try {
     await garminPost('/garmin/complete', { code, state });

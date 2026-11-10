@@ -16,6 +16,9 @@
 
 import { mirrorGarminRun } from './runs.js';
 
+// This is the redirect URI registered with Garmin. The browser returns here
+// with ?code=&state=. Do not point it at Pages unless that exact URL
+// (including the trailing slash) is added in the Garmin developer portal.
 export const CALLBACK = 'https://helloajchu-png.github.io/run-app/';
 const AUTHORIZE_URL = 'https://connect.garmin.com/oauth2Confirm';
 const TOKEN_URL = 'https://connectapi.garmin.com/di-oauth2-service/oauth/token';

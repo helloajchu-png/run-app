@@ -12,7 +12,11 @@ import {
 } from './passwords.js';
 import { getSettings, listRuns, putSync } from './runs.js';
 
-const DEFAULT_ORIGIN = 'https://helloajchu-png.github.io';
+const DEFAULT_ORIGINS = [
+  'https://helloajchu-png.github.io',
+  'https://run-together.pages.dev',
+  'https://run-together-app.pages.dev',
+];
 const RATES = {
   login: { limit: 10, windowMs: 15 * 60 * 1000 },
   register: { limit: 5, windowMs: 60 * 60 * 1000 },
@@ -26,11 +30,16 @@ function fail(message, status) {
   throw err;
 }
 
+function configuredOrigins(env) {
+  return String((env && env.ALLOWED_ORIGIN) || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
 function allowOrigin(env, request) {
-  const list = String((env && env.ALLOWED_ORIGIN) || DEFAULT_ORIGIN).split(',').map(s => s.trim()).filter(Boolean);
+  const configured = configuredOrigins(env);
+  const list = [...new Set([...DEFAULT_ORIGINS, ...configured])];
   const origin = request.headers.get('Origin');
   if (origin && list.includes(origin)) return origin;
-  return list[0] || DEFAULT_ORIGIN;
+  return configured[0] || DEFAULT_ORIGINS[0];
 }
 
 function json(request, env, data, status = 200) {

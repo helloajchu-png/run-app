@@ -6,23 +6,17 @@ D1 `run-app` 的 database_id 是 `00ce5642-5c60-4355-868a-49924791dea9`。
 
 教練 Worker 維持獨立，不要改它：`https://run-app-coach.helloajchu.workers.dev`。
 
-## 部署帳號與同步
+## 部署
 
-在 `worker/` 目錄。既有資料表不要刪。`migrations/001_garmin_activities.sql` 是 `CREATE TABLE IF NOT EXISTS`，可以再跑一次。新表在 `migrations/002_accounts.sql`。
+換到 Cloudflare Pages 這次不要改 D1，不要執行 `wrangler d1 migrations apply`。
+
+在 `worker/` 只更新程式（保留已設定的變數與密鑰）：
 
 ```bash
-npx wrangler d1 migrations apply run-app --remote
 npx wrangler deploy --keep-vars
 ```
 
-`--keep-vars` 會留下已經在 Cloudflare 上的變數和密鑰。部署後確認 `/health` 的 `auth` 是 `true`。
-
-若這顆資料庫還沒用 Wrangler 的 migration 紀錄，而 `migrations apply` 想重建追蹤表，照提示確認即可。只想補上新表、不重跑舊檔時：
-
-```bash
-npx wrangler d1 execute run-app --remote --file=migrations/002_accounts.sql
-npx wrangler deploy --keep-vars
-```
+`--keep-vars` 會留下已經在 Cloudflare 上的變數和密鑰。部署後確認 `/health` 的 `auth` 是 `true`。這次沒有資料表變更。
 
 本機測試（Node 22，不用安裝套件）：
 
@@ -43,7 +37,13 @@ npx wrangler secret put GARMIN_CONSUMER_SECRET
 
 `GARMIN_CONSUMER_KEY` 是 OAuth client_id，`GARMIN_CONSUMER_SECRET` 是 client_secret。未設定時，`POST /garmin/start` 回 503。
 
-選用變數（不是密鑰）：`ALLOWED_ORIGIN`。沒設的時候，CORS 只允許 `https://helloajchu-png.github.io`。要改來源時，在 Cloudflare 的 Worker Variables 設定，多個來源用逗號分隔。不要把密鑰放進 `wrangler.toml`。
+CORS 預設同時允許：
+
+- `https://helloajchu-png.github.io`
+- `https://run-together.pages.dev`
+- `https://run-together-app.pages.dev`（專案名稱被占用時的備援）
+
+選用變數（不是密鑰）：`ALLOWED_ORIGIN`。設了會加進上面的清單，不會拿掉預設來源。不要把密鑰放進 `wrangler.toml`。
 
 ## 帳號行為
 
@@ -69,6 +69,12 @@ npx wrangler secret put GARMIN_CONSUMER_SECRET
 權杖和 Garmin user id 寫在 `garmin_oauth.user_id`，跟著帳號走。另一台裝置登入同一個帳號後，`POST /garmin/status` 就是已連結，`POST /garmin/inbox` 讀得到已推進來的跑步。推送網址不要改，Garmin 已經登記：
 
 `https://run-app-api.helloajchu.workers.dev/garmin/push`
+
+OAuth redirect URI 也不要改，Garmin 登記的是（含結尾斜線）：
+
+`https://helloajchu-png.github.io/run-app/`
+
+授權完成後，Garmin 仍把瀏覽器送回這個舊網址，並在 query 帶 `code` 與 `state`。換址用的 GitHub Pages 轉址頁會把這兩個值放進新網站的 fragment，新網站再呼叫 `/garmin/complete`。權杖交換送出的 `redirect_uri` 維持上面這個舊網址，所以 Garmin 開發者後台不用改。若以後要讓 Garmin 直接導回 Pages，必須先在後台新增完全一樣的 `https://run-together.pages.dev/`，才能改程式裡的 `CALLBACK`。
 
 `POST /garmin/push` 不需登入。只留下跑步；有對到帳號時，同時寫進該帳號的 `user_runs`。Starter 是 Push only，不含歷史資料。`callbackURL` 這種 ping 只略過，不會再去拉資料。
 
