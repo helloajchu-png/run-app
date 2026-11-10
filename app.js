@@ -143,9 +143,14 @@ function coachFail(ex){
  if(/upstream/i.test(blob))return '送出失敗：upstream'+(j.detail?'：'+j.detail:(detail&&!/^upstream$/i.test(String(detail))?'：'+detail:''));
  return '送出失敗：'+(detail||raw.slice(0,160)||ex.message||('HTTP '+(ex.status||'')));
 }
+function coachContextText(context){
+ if(typeof context==='string')return context;
+ try{return JSON.stringify(context??{})}catch(err){return JSON.stringify({note:'上下文無法序列化',detail:String(err)})}
+}
 async function postChat(message,context){
  let r;
- try{r=await fetch(coachEndpoint()+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,context})})}
+ const body=JSON.stringify({message,context:coachContextText(context)});
+ try{r=await fetch(coachEndpoint()+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body})}
  catch(e){e.status=0;throw e}
  const raw=await r.text();let j={};try{j=JSON.parse(raw)}catch{}
  if(!r.ok||typeof j.reply!=='string'){const err=new Error(j.error||j.message||raw.slice(0,160)||('HTTP '+r.status));err.status=r.status;err.body=j;err.raw=raw;throw err}
