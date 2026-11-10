@@ -1,44 +1,29 @@
 'use strict';
-const GARMIN_API = 'https://run-app-api.helloajchu.workers.dev';
 const SID_KEY = 'ra_garmin_sid';
 const CONSENT_KEY = 'ra_garmin_coach_ok';
 
 function gid(s) { return document.getElementById(s); }
-function sid() {
-  let id = localStorage.getItem(SID_KEY);
-  if (!id) { id = crypto.randomUUID().replace(/-/g, ''); localStorage.setItem(SID_KEY, id); }
-  return id;
-}
 function setGarminUi(connected) {
   gid('garminState').textContent = connected
-    ? '已連結。Garmin 會在你上傳新活動後自動送進來。連結前的舊活動不會補進。'
-    : '尚未連結。完成授權後，新活動才會由 Garmin 送進來。';
+    ? '已連結這個帳號。換手機登入後也會顯示已連結，不用重新授權。連結前的舊活動不會補進。'
+    : '尚未連結。連結一次就存在這個帳號，其他裝置登入後也會是已連結。';
   gid('garminLink').hidden = connected;
   gid('garminUnlink').hidden = !connected;
 }
 async function garminPost(path, body) {
-  let res;
-  try {
-    res = await fetch(GARMIN_API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  } catch {
-    throw new Error('無法連上 Garmin 服務。手動紀錄不受影響。');
-  }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-  return data;
+  if (!window.RA_AUTH || !window.RA_AUTH.token()) throw new Error('請先登入');
+  return window.RA_AUTH.api(path, { method: 'POST', body: body || {} });
 }
 async function pullInbox() {
-  const id = localStorage.getItem(SID_KEY);
-  if (!id || !window.importGarminRuns) return;
-  const data = await garminPost('/garmin/inbox', { sid: id });
+  if (!window.importGarminRuns) return;
+  const data = await garminPost('/garmin/inbox', {});
   const merged = window.importGarminRuns(data.runs || []);
   if (merged.added) gid('garminMsg').textContent = `新活動 ${merged.added} 筆已加入紀錄`;
 }
 async function refreshGarmin() {
-  const id = localStorage.getItem(SID_KEY);
-  if (!id) { setGarminUi(false); return; }
+  if (!window.RA_AUTH || !window.RA_AUTH.token()) { setGarminUi(false); return; }
   try {
-    const data = await garminPost('/garmin/status', { sid: id });
+    const data = await garminPost('/garmin/status', {});
     setGarminUi(!!data.connected);
     if (data.connected) await pullInbox();
   } catch (err) {
@@ -47,20 +32,34 @@ async function refreshGarmin() {
   }
 }
 async function finishGarminReturn() {
-  const q = new URLSearchParams(location.search);
-  const code = q.get('code');
-  const state = q.get('state');
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  const state = params.get('state');
   if (!code && !state) return;
   history.replaceState({}, '', location.pathname);
   if (!code || !state) { gid('garminMsg').textContent = 'Garmin 沒有完成授權'; return; }
   try {
-    await garminPost('/garmin/complete', { sid: sid(), code, state });
+    await garminPost('/garmin/complete', { code, state });
     setGarminUi(true);
-    gid('garminMsg').textContent = '已連結。之後的新活動要等推送接收端上線才會進來，不會補舊紀錄。';
+    gid('garminMsg').textContent = '已連結這個帳號。之後的新跑步會進來，其他裝置登入後也看得到連結。';
   } catch (err) {
-    setGarminUi(false);
     gid('garminMsg').textContent = err.message;
   }
+}
+async function claimOldDevice() {
+  const old = localStorage.getItem(SID_KEY);
+  if (!old) return;
+  try {
+    await garminPost('/garmin/claim', { sid: old });
+    localStorage.removeItem(SID_KEY);
+  } catch (err) {
+    if (err.status === 409) localStorage.removeItem(SID_KEY);
+  }
+}
+async function garminBoot() {
+  await claimOldDevice();
+  await finishGarminReturn();
+  await refreshGarmin();
 }
 
 gid('garminCoachOk').checked = localStorage.getItem(CONSENT_KEY) === '1';
@@ -68,13 +67,13 @@ gid('garminCoachOk').addEventListener('change', () => {
   if (gid('garminCoachOk').checked) localStorage.setItem(CONSENT_KEY, '1');
   else localStorage.removeItem(CONSENT_KEY);
   gid('garminMsg').textContent = gid('garminCoachOk').checked
-    ? '之後問教練時才會附上來源為 Garmin 的紀錄。可隨時取消。'
+    ? '之後問教練時才會附上來源為 Garmin 的紀錄。可隨時取消。這項同意只在這台裝置。'
     : '已停止把 Garmin 紀錄放進之後的教練問答。';
 });
 gid('garminLink').addEventListener('click', async () => {
   gid('garminMsg').textContent = '前往 Garmin…';
   try {
-    const data = await garminPost('/garmin/start', { sid: sid() });
+    const data = await garminPost('/garmin/start', {});
     if (!data.authorizeUrl) throw new Error('沒有授權網址');
     location.href = data.authorizeUrl;
   } catch (err) {
@@ -82,11 +81,7 @@ gid('garminLink').addEventListener('click', async () => {
   }
 });
 gid('garminUnlink').addEventListener('click', async () => {
-  const id = localStorage.getItem(SID_KEY);
-  try { if (id) await garminPost('/garmin/disconnect', { sid: id }); }
+  try { await garminPost('/garmin/disconnect', {}); setGarminUi(false); gid('garminMsg').textContent = '已解除這個帳號的 Garmin 連結。'; }
   catch (err) { gid('garminMsg').textContent = err.message; }
-  localStorage.removeItem(SID_KEY);
-  setGarminUi(false);
-  if (!gid('garminMsg').textContent) gid('garminMsg').textContent = '已解除這台裝置上的連結編號。';
 });
-finishGarminReturn().then(refreshGarmin);
+window.addEventListener('ra-ready', garminBoot);

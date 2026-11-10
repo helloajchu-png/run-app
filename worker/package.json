@@ -1,0 +1,8 @@
+{
+  "name": "run-app-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --disable-warning=ExperimentalWarning --test test/api.test.js"
+  }
+}

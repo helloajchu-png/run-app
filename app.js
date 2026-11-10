@@ -9,7 +9,8 @@ const fmtP=spk=>isFinite(spk)&&spk>0?fmtT(spk)+'/km':'—';
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const daysAgo=d=>(Date.parse(today())-Date.parse(d))/864e5;
 const DN={5:'5K',10:'10K',21.0975:'半馬',42.195:'全馬'};
-function save(){S.set('runs',runs);renderAll()}
+let accountSilent=false;
+function save(){S.set('runs',runs);renderAll();if(!accountSilent&&window.scheduleAccountSync)window.scheduleAccountSync()}
 
 // ---------- tabs ----------
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button,.tab').forEach(x=>x.classList.remove('on'));b.classList.add('on');$('#'+b.dataset.tab).classList.add('on');renderAll()});
@@ -24,7 +25,7 @@ $('#runForm').onsubmit=e=>{e.preventDefault();const t=parseT($('#fTime').value),
 function resetForm(){$('#runForm').reset();$('#editId').value='';$('#fDate').value=today();$('#formTitle').textContent='新增跑步';$('#cancelEdit').hidden=true;updPace()}
 $('#cancelEdit').onclick=resetForm;
 function editRun(id){const r=runs.find(x=>x.id===id);if(!r)return;$('#editId').value=r.id;$('#fDate').value=r.date;$('#fDist').value=r.distanceKm;$('#fTime').value=fmtT(r.durationSec);$('#fHr').value=r.avgHr||'';$('#fNote').value=r.note||'';$('#formTitle').textContent='編輯跑步';$('#cancelEdit').hidden=false;updPace();scrollTo({top:0,behavior:'smooth'})}
-function delRun(id){if(confirm('確定刪除這筆紀錄？')){runs=runs.filter(x=>x.id!==id);save()}}
+function delRun(id){if(!confirm('確定刪除這筆紀錄？'))return;if(window.noteAccountDelete)window.noteAccountDelete(id);runs=runs.filter(x=>x.id!==id);save()}
 function renderLog(){runs.sort((a,b)=>b.date.localeCompare(a.date));$('#runCount').textContent=`（${runs.length} 筆）`;
  $('#runList').innerHTML=runs.length?runs.map(r=>`<li><div class="run-body"><div class="run-top"><b>${r.date}</b><span class="run-fig">${r.distanceKm.toFixed(2)}</span><span class="unit">km</span><span class="run-time">${fmtT(r.durationSec)}</span></div><div class="meta">配速 ${fmtP(r.durationSec/r.distanceKm)}${r.avgHr?' · 心率 '+r.avgHr:''}${r.source&&r.source!=='manual'?' <span class="src">GARMIN</span>':''}${r.note?' · '+esc(r.note):''}</div></div><div class="acts"><button class="ghost" data-e="${r.id}">編輯</button><button class="danger" data-d="${r.id}">刪除</button></div></li>`).join(''):'<li class="muted">尚無紀錄</li>';
  $('#runList').querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>editRun(b.dataset.e));$('#runList').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>delRun(b.dataset.d))}
@@ -48,7 +49,7 @@ function renderFit(){const race=S.get('race',null);if(race){$('#raceDist').value
  const V=b.v;
  const card=(label,time,sub)=>`<article class="stat"><p class="stat-label">${label}</p><p class="pred-num">${time}</p><p class="stat-sub">${sub}</p></article>`;
  $('#predict').innerHTML=`<p class="muted">依據 ${esc(b.label)} · VDOT ${V.toFixed(1)}</p><div class="pred-grid">${[5,10,21.0975,42.195].map(d=>card(DN[d],fmtT(vdotTime(V,d)),fmtP(vdotTime(V,d)/d))).join('')}</div><h2 style="margin-top:16px">訓練配速</h2><div class="pred-grid">${[['輕鬆 E',fmtP(paceAt(V,.70))],['馬拉松 M',fmtP(vdotTime(V,42.195)/42.195)],['閾值 T',fmtP(paceAt(V,.88))],['間歇 I',fmtP(paceAt(V,.975))]].map(([n,p])=>card(n,p,'每公里')).join('')}</div>`}
-$('#saveRace').onclick=()=>{const sec=parseT($('#raceTime').value);if(!(sec>0))return alert('請輸入成績，例如 4:03:00');S.set('race',{dist:+$('#raceDist').value,sec,date:$('#raceDate').value});renderAll();alert('已儲存')};
+$('#saveRace').onclick=()=>{const sec=parseT($('#raceTime').value);if(!(sec>0))return alert('請輸入成績，例如 4:03:00');S.set('race',{dist:+$('#raceDist').value,sec,date:$('#raceDate').value});renderAll();if(window.scheduleAccountSync)window.scheduleAccountSync();alert('已儲存')};
 
 // ---------- plan ----------
 function weeklyKm(n=4){const w=[];for(let i=0;i<n;i++)w.push(runs.filter(r=>{const a=daysAgo(r.date);return a>=i*7&&a<i*7+7}).reduce((s,r)=>s+r.distanceKm,0));return w} // w[0]=this week
@@ -86,8 +87,8 @@ function renderPlan(){const g=S.get('goal',null);if(!g){$('#gDate').value='';$('
  $('#planOut').innerHTML=`<div class="card"><p class="kicker">THIS WEEK</p><h2>本週</h2><div class="weekcal">${cal}</div></div><div class="card"><p>距離比賽 <b>${p.weeks}</b> 週。目前預測 ${fmtT(pred)}（VDOT ${p.V.toFixed(1)}），目標需 VDOT ${p.gV.toFixed(1)}。${gap>0?`<br>還差約 ${fmtT(gap)}，${p.gV-p.V>3?'目標偏積極，建議穩定累積里程。':'持續訓練有機會達成！'}`:'<br>目前體能已達目標，維持即可。'}</p>
  <table><tr><td>輕鬆 / 長跑</td><td>${fmtP(p.P.E)}</td></tr><tr><td>目標配速</td><td>${fmtP(p.P.G)}</td></tr><tr><td>節奏 T</td><td>${fmtP(p.P.T)}</td></tr><tr><td>間歇 I</td><td>${fmtP(p.P.I)}</td></tr></table></div>`+
  p.out.slice(1).map(w=>`<div class="card wk"><h3>第 ${w.w} 週・${w.phase}・約 ${w.km} km</h3>${w.days.map(d=>`<div>${d[0]}　<span class="tag ${TAG[d[1]][1]}">${TAG[d[1]][0]}</span> ${esc(d[2])}　<span class="muted">${fmtP(d[3])}</span></div>`).join('')}<div class="muted">其餘日休息或交叉訓練</div></div>`).join('');
- $('#planOut').querySelectorAll('[data-iso]').forEach(inp=>inp.onchange=()=>{const c=checks();if(inp.checked)c[inp.dataset.iso]=1;else delete c[inp.dataset.iso];S.set('checks',c);inp.closest('.calday').classList.toggle('is-done',inp.checked)})}
-$('#genPlan').onclick=()=>{const sec=parseT($('#gTime').value),date=$('#gDate').value;if(!(sec>0)||!date)return alert('請填寫比賽日期與目標時間');if(date<=today())return alert('比賽日期需在今天之後');S.set('goal',{dist:+$('#gDist').value,date,sec,days:$('#gDays').value});renderPlan()};
+ $('#planOut').querySelectorAll('[data-iso]').forEach(inp=>inp.onchange=()=>{const c=checks();if(inp.checked)c[inp.dataset.iso]=1;else delete c[inp.dataset.iso];S.set('checks',c);inp.closest('.calday').classList.toggle('is-done',inp.checked);if(window.scheduleAccountSync)window.scheduleAccountSync()})}
+$('#genPlan').onclick=()=>{const sec=parseT($('#gTime').value),date=$('#gDate').value;if(!(sec>0)||!date)return alert('請填寫比賽日期與目標時間');if(date<=today())return alert('比賽日期需在今天之後');S.set('goal',{dist:+$('#gDist').value,date,sec,days:$('#gDays').value});renderPlan();if(window.scheduleAccountSync)window.scheduleAccountSync()};
 
 // ---------- coach (rule-based; LLM optional) ----------
 function coachTips(){const T=[];const add=(c,t)=>T.push({c,t});
@@ -179,11 +180,11 @@ async function askCoach(){
 }
 const sendBtn=document.getElementById('chatSend');
 if(sendBtn)sendBtn.addEventListener('click',askCoach);
-$('#saveCoachUrl').onclick=()=>{const v=$('#coachUrl').value.trim();if(v)S.set('coachUrl',v);else localStorage.removeItem('ra_coachUrl');alert(v?'已改用自訂網址':'已恢復預設教練')};
+$('#saveCoachUrl').onclick=()=>{const v=$('#coachUrl').value.trim();if(v)S.set('coachUrl',v);else localStorage.removeItem('ra_coachUrl');if(window.scheduleAccountSync)window.scheduleAccountSync();alert(v?'已改用自訂網址':'已恢復預設教練')};
 function renderCoach(){$('#tips').innerHTML=coachTips().map(t=>`<div class="tip ${t.c}">${esc(t.t)}</div>`).join('');
  const urlEl=$('#coachUrl');if(urlEl&&document.activeElement!==urlEl)urlEl.value=S.get('coachUrl','')||'';renderChat()}
 $('#exportBtn').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({runs,race:S.get('race'),goal:S.get('goal')},null,1)],{type:'application/json'}));a.download='runs.json';a.click()};
-$('#clearBtn').onclick=()=>{if(confirm('清除所有資料？')){['runs','race','goal','checks'].forEach(k=>localStorage.removeItem('ra_'+k));runs=[];renderAll()}};
+$('#clearBtn').onclick=()=>{if(!confirm('清除所有訓練資料？帳號裡的紀錄、比賽與目標也會刪掉。'))return;if(window.noteAccountDelete)runs.forEach(r=>window.noteAccountDelete(r.id));['runs','race','goal','checks','blurb'].forEach(k=>localStorage.removeItem('ra_'+k));runs=[];renderAll();if(window.scheduleAccountSync)window.scheduleAccountSync()};
 function todaySession(){const g=S.get('goal',null);const name=weekdayName(today());
  if(g&&g.date===today())return {title:'比賽',detail:`${DN[g.dist]||g.dist+'km'} 目標 ${fmtT(g.sec)}`,pace:fmtP(g.sec/g.dist),rest:false};
  if(!g||!g.date||g.date<today())return null;
@@ -200,7 +201,6 @@ const askTodayBtn=document.getElementById('askToday');
 if(askTodayBtn)askTodayBtn.addEventListener('click',()=>{const box=$('#chatMsg');if(box)box.value=todayQuestion();const tab=document.querySelector('nav button[data-tab="coach"]');if(tab)tab.click();if(box)box.focus()});
 
 // ---------- init ----------
-if(!S.get('race',null))S.set('race',{dist:42.195,sec:parseT('4:03:00'),date:''});
 function renderHero(){
  const SUB4=14400,BASE=6.5*3600,C=2*Math.PI*46;
  const b=bestEffort(),wk=weeklyKm(1)[0];
@@ -231,11 +231,25 @@ function renderHero(){
 }
 function renderAll(){renderLog();renderFit();renderPlan();renderCoach();renderHero();renderToday()}
 renderAll();updPace();
-const APP_VER='run-app-v13';
+const APP_VER='run-app-v14';
 function showToast(msg){let el=$('#toast');if(!el){el=document.createElement('p');el.id='toast';el.className='toast';document.body.appendChild(el)}el.textContent=msg}
 function noteUpdate(){const prev=localStorage.getItem('ra_sw');const back=!!(prev||navigator.serviceWorker?.controller);if(prev!==APP_VER&&back&&sessionStorage.getItem('ra_toasted')!==APP_VER){sessionStorage.setItem('ra_toasted',APP_VER);showToast('已更新，請再試一次')}localStorage.setItem('ra_sw',APP_VER)}
 if('serviceWorker' in navigator){noteUpdate();navigator.serviceWorker.register('sw.js');navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.version)noteUpdate()});navigator.serviceWorker.addEventListener('controllerchange',noteUpdate)}
 window.importGarminRuns=function(list){
- const shaped=(list||[]).map(r=>({id:'g'+(r.activityId||Date.now())+'_'+Math.random().toString(36).slice(2,8),date:r.date,distanceKm:+r.distanceKm,durationSec:+r.durationSec,avgHr:r.avgHr||null,note:r.note||'',source:'garmin'}));
+ const shaped=(list||[]).map(r=>({id:('g'+String(r.activityId||Date.now())+'_'+Math.random().toString(36).slice(2,8)).replace(/[^A-Za-z0-9_-]/g,'').slice(0,80),date:r.date,distanceKm:+r.distanceKm,durationSec:+r.durationSec,avgHr:r.avgHr||null,note:r.note||'',source:'garmin'}));
  const m=GarminImport.mergeRuns(runs,shaped);runs=m.runs;save();return m};
-window.RA={get runs(){return runs},S,$,fmtP,fmtT,DN,today,daysAgo,weeklyKm};
+window.RA={
+ get runs(){return runs},
+ setRuns(next){accountSilent=true;try{runs=Array.isArray(next)?next:[];S.set('runs',runs);renderAll()}finally{accountSilent=false}},
+ readSettings(){return{race:S.get('race',null),goal:S.get('goal',null),checks:S.get('checks',{})||{},coachUrl:S.get('coachUrl','')||'',planBlurb:S.get('blurb','')||''}},
+ applySettings(s){if(!s)return;accountSilent=true;try{
+  if('race' in s){if(s.race)S.set('race',s.race);else localStorage.removeItem('ra_race')}
+  if('goal' in s){if(s.goal)S.set('goal',s.goal);else localStorage.removeItem('ra_goal')}
+  if('checks' in s)S.set('checks',s.checks||{});
+  if('coachUrl' in s){if(s.coachUrl)S.set('coachUrl',s.coachUrl);else localStorage.removeItem('ra_coachUrl')}
+  if('planBlurb' in s){if(s.planBlurb)S.set('blurb',s.planBlurb);else localStorage.removeItem('ra_blurb');const el=$('#meBlurb');if(el&&document.activeElement!==el)el.value=s.planBlurb||''}
+  renderAll();
+ }finally{accountSilent=false}},
+ clearLocal(){accountSilent=true;try{['runs','race','goal','checks','coachUrl','blurb'].forEach(k=>localStorage.removeItem('ra_'+k));runs=[];chat=[];renderAll()}finally{accountSilent=false}},
+ snapshotLocal(){return{runs:S.get('runs',[])||[],race:S.get('race',null),goal:S.get('goal',null),checks:S.get('checks',{})||{},planBlurb:S.get('blurb','')||''}},
+ S,$,fmtP,fmtT,DN,today,daysAgo,weeklyKm};
