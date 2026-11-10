@@ -3,12 +3,18 @@
 // (developerportal.garmin.com/sites/default/files/OAuth2PKCE.pdf).
 // Starter access is push-only and does not include historical data
 // (developer.garmin.com/gc-developer-program). This file does not call a
-// history download. Push payload fields are not in that public PDF, so no
-// push parser is implemented here.
+// history download. Push payload fields are not in that public PDF, so the
+// parser only keeps an item when it already looks like a run.
+//
+// The OAuth tokens and Garmin user id live on the logged-in account
+// (garmin_oauth.user_id). Any device with that account reads the same
+// connection. POST /garmin/push stays unauthenticated because Garmin calls it.
 //
 // Secrets, set with wrangler and never committed:
 //   GARMIN_CONSUMER_KEY    (OAuth client_id)
 //   GARMIN_CONSUMER_SECRET (OAuth client_secret)
+
+import { mirrorGarminRun } from './runs.js';
 
 export const CALLBACK = 'https://helloajchu-png.github.io/run-app/';
 const AUTHORIZE_URL = 'https://connect.garmin.com/oauth2Confirm';
@@ -145,21 +151,36 @@ async function storePushedRuns(env, parsed) {
   let stored = 0;
   let unmatched = 0;
   for (const run of parsed.runs) {
-    const owner = await db.prepare('SELECT sid FROM garmin_oauth WHERE garmin_user_id=?').bind(run.userId).first();
-    if (!owner) { unmatched++; continue; }
+    const mapped = await db.prepare('SELECT user_id FROM garmin_oauth WHERE garmin_user_id=? AND user_id IS NOT NULL LIMIT 1').bind(run.userId).first();
+    const known = mapped || await db.prepare('SELECT sid FROM garmin_oauth WHERE garmin_user_id=? LIMIT 1').bind(run.userId).first();
+    if (!known) { unmatched++; continue; }
     const result = await db.prepare(`INSERT OR IGNORE INTO garmin_activities
       (id, garmin_user_id, summary_id, activity_date, distance_km, duration_sec, avg_hr, note, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
       crypto.randomUUID(), run.userId, run.summaryId, run.date, run.distanceKm, run.durationSec, run.avgHr, run.note, new Date().toISOString()
     ).run();
     if (result && result.meta && result.meta.changes) stored++;
+    if (mapped && mapped.user_id) {
+      try { await mirrorGarminRun(db, mapped.user_id, run); } catch { /* inbox still has the activity */ }
+    }
   }
   return { ok: true, stored, unmatched, ping: parsed.ping, skipped: parsed.skipped, received: parsed.received };
 }
 
-async function storedRuns(env, sid) {
-  const row = await database(env).prepare('SELECT access_token, garmin_user_id FROM garmin_oauth WHERE sid=?').bind(sid).first();
-  if (!row || !row.access_token) fail('尚未連結 Garmin', 401);
+async function accountLink(env, userId) {
+  return database(env).prepare(`SELECT * FROM garmin_oauth
+    WHERE user_id=? AND access_token IS NOT NULL
+    ORDER BY updated_at DESC LIMIT 1`).bind(userId).first();
+}
+
+async function linkStatus(env, user) {
+  const row = await accountLink(env, user.id);
+  return { connected: !!(row && row.access_token) };
+}
+
+async function inbox(env, user) {
+  const row = await accountLink(env, user.id);
+  if (!row) return { connected: false, runs: [] };
   if (!row.garmin_user_id) return { connected: true, runs: [] };
   const rows = await database(env).prepare(`SELECT summary_id, activity_date, distance_km, duration_sec, avg_hr, note
     FROM garmin_activities WHERE garmin_user_id=? ORDER BY activity_date DESC LIMIT 100`).bind(row.garmin_user_id).all();
@@ -169,74 +190,100 @@ async function storedRuns(env, sid) {
   return { connected: true, runs };
 }
 
-export async function handleGarmin(request, env, url) {
+async function beginLink(env, user) {
+  const { key } = secrets(env);
   const db = database(env);
+  const { verifier, challenge } = await pkce();
+  const state = b64url(crypto.getRandomValues(new Uint8Array(24)));
+  const now = new Date().toISOString();
+  const existing = await db.prepare('SELECT sid FROM garmin_oauth WHERE user_id=? ORDER BY updated_at DESC LIMIT 1').bind(user.id).first();
+  if (existing) {
+    await db.prepare('UPDATE garmin_oauth SET state=?, code_verifier=?, updated_at=? WHERE sid=?')
+      .bind(state, verifier, now, existing.sid).run();
+  } else {
+    const sid = crypto.randomUUID().replace(/-/g, '');
+    await db.prepare(`INSERT INTO garmin_oauth (sid, state, code_verifier, access_token, refresh_token, expires_at, garmin_user_id, updated_at, user_id)
+      VALUES (?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)`)
+      .bind(sid, state, verifier, now, user.id).run();
+  }
+  const authorizeUrl = `${AUTHORIZE_URL}?response_type=code&client_id=${enc(key)}&code_challenge=${enc(challenge)}&code_challenge_method=S256&redirect_uri=${enc(CALLBACK)}&state=${enc(state)}`;
+  return { authorizeUrl };
+}
+
+async function finishLink(env, user, body) {
+  secrets(env);
+  const code = String(body.code || '');
+  const state = String(body.state || '');
+  if (!code || !state) fail('Garmin 沒有完成授權', 400);
+  const db = database(env);
+  const row = await db.prepare('SELECT sid, state, code_verifier FROM garmin_oauth WHERE user_id=? AND state=?').bind(user.id, state).first();
+  if (!row || !row.code_verifier) fail('找不到這次連結工作階段，請再按一次連結 Garmin', 400);
+  const data = await tokenRequest(env, {
+    grant_type: 'authorization_code',
+    code,
+    code_verifier: row.code_verifier,
+    redirect_uri: CALLBACK,
+  });
+  await saveTokens(env, row.sid, data);
+  let garminUserId = null;
+  const who = await fetch(USER_ID_URL, { headers: { Authorization: `Bearer ${data.access_token}` } });
+  if (who.ok) {
+    const info = await who.json().catch(() => ({}));
+    garminUserId = info.userId || null;
+  }
+  if (!garminUserId) fail('Garmin 沒有回傳使用者編號', 502);
+  const other = await db.prepare('SELECT user_id FROM garmin_oauth WHERE garmin_user_id=? AND user_id IS NOT NULL AND user_id<>?').bind(String(garminUserId), user.id).first();
+  if (other) fail('這個 Garmin 已經連結到別的帳號', 409);
+  await db.prepare('UPDATE garmin_oauth SET garmin_user_id=? WHERE sid=?').bind(String(garminUserId), row.sid).run();
+  return { connected: true };
+}
+
+export async function disconnectUser(env, userId, { purgeActivities = false } = {}) {
+  const db = database(env);
+  const rows = await db.prepare('SELECT * FROM garmin_oauth WHERE user_id=?').bind(userId).all();
+  const links = rows.results || [];
+  for (const row of links) {
+    if (!row.access_token) continue;
+    try {
+      const token = await bearer(env, row);
+      await fetch(DEREGISTER_URL, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    } catch { /* still drop the local row */ }
+  }
+  const garminIds = [...new Set(links.map(row => row.garmin_user_id).filter(Boolean))];
+  await db.prepare('DELETE FROM garmin_oauth WHERE user_id=?').bind(userId).run();
+  if (purgeActivities) {
+    for (const garminUserId of garminIds) {
+      await db.prepare('DELETE FROM garmin_activities WHERE garmin_user_id=?').bind(garminUserId).run();
+    }
+  }
+  return { connected: false };
+}
+
+async function claim(env, user, body) {
+  const sid = sidOf(body);
+  const db = database(env);
+  const row = await db.prepare('SELECT sid, user_id, access_token FROM garmin_oauth WHERE sid=?').bind(sid).first();
+  if (!row) return { connected: false };
+  if (row.user_id && row.user_id !== user.id) fail('這組連結已屬於別的帳號', 409);
+  if (!row.user_id) {
+    const mine = await accountLink(env, user.id);
+    if (!mine) await db.prepare('UPDATE garmin_oauth SET user_id=?, updated_at=? WHERE sid=?').bind(user.id, new Date().toISOString(), sid).run();
+  }
+  return linkStatus(env, user);
+}
+
+export async function handleGarmin(request, env, url, user) {
   const body = request.method === 'GET' ? {} : await request.json().catch(() => ({}));
-
-  if (url.pathname === '/garmin/start' && request.method === 'POST') {
-    const { key } = secrets(env);
-    const sid = sidOf(body);
-    const { verifier, challenge } = await pkce();
-    const state = b64url(crypto.getRandomValues(new Uint8Array(24)));
-    await db.prepare(`INSERT INTO garmin_oauth (sid, state, code_verifier, access_token, refresh_token, expires_at, garmin_user_id, updated_at)
-      VALUES (?, ?, ?, NULL, NULL, NULL, NULL, ?)
-      ON CONFLICT(sid) DO UPDATE SET state=excluded.state, code_verifier=excluded.code_verifier, access_token=NULL, refresh_token=NULL, expires_at=NULL, updated_at=excluded.updated_at`)
-      .bind(sid, state, verifier, new Date().toISOString()).run();
-    const authorizeUrl = `${AUTHORIZE_URL}?response_type=code&client_id=${enc(key)}&code_challenge=${enc(challenge)}&code_challenge_method=S256&redirect_uri=${enc(CALLBACK)}&state=${enc(state)}`;
-    return { authorizeUrl };
-  }
-
-  if (url.pathname === '/garmin/complete' && request.method === 'POST') {
-    secrets(env);
-    const sid = sidOf(body);
-    const code = String(body.code || '');
-    const state = String(body.state || '');
-    if (!code || !state) fail('Garmin 沒有完成授權', 400);
-    const row = await db.prepare('SELECT sid, state, code_verifier FROM garmin_oauth WHERE sid=?').bind(sid).first();
-    if (!row || !row.code_verifier || row.state !== state) fail('找不到這次連結工作階段，請再按一次連結 Garmin', 400);
-    const data = await tokenRequest(env, {
-      grant_type: 'authorization_code',
-      code,
-      code_verifier: row.code_verifier,
-      redirect_uri: CALLBACK,
-    });
-    await saveTokens(env, sid, data);
-    let garminUserId = null;
-    const who = await fetch(USER_ID_URL, { headers: { Authorization: `Bearer ${data.access_token}` } });
-    if (who.ok) {
-      const info = await who.json().catch(() => ({}));
-      garminUserId = info.userId || null;
-      if (garminUserId) await db.prepare('UPDATE garmin_oauth SET garmin_user_id=? WHERE sid=?').bind(garminUserId, sid).run();
-    }
-    return { connected: true, garminUserId };
-  }
-
-  if (url.pathname === '/garmin/status' && request.method === 'POST') {
-    const sid = sidOf(body);
-    const row = await db.prepare('SELECT access_token FROM garmin_oauth WHERE sid=?').bind(sid).first();
-    return { connected: !!(row && row.access_token) };
-  }
-
-  if (url.pathname === '/garmin/disconnect' && request.method === 'POST') {
-    const sid = sidOf(body);
-    const row = await db.prepare('SELECT * FROM garmin_oauth WHERE sid=?').bind(sid).first();
-    if (row && row.access_token) {
-      try {
-        const token = await bearer(env, row);
-        await fetch(DEREGISTER_URL, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-      } catch { /* still drop the local row */ }
-    }
-    await db.prepare('DELETE FROM garmin_oauth WHERE sid=?').bind(sid).run();
-    return { connected: false };
-  }
 
   if (url.pathname === '/garmin/push' && request.method === 'POST') {
     return storePushedRuns(env, runsFromPush(body));
   }
-
-  if ((url.pathname === '/garmin/inbox' || url.pathname === '/garmin/sync') && request.method === 'POST') {
-    return storedRuns(env, sidOf(body));
-  }
-
+  if (!user) fail('請先登入', 401);
+  if (url.pathname === '/garmin/start' && request.method === 'POST') return beginLink(env, user);
+  if (url.pathname === '/garmin/complete' && request.method === 'POST') return finishLink(env, user, body);
+  if (url.pathname === '/garmin/status' && request.method === 'POST') return linkStatus(env, user);
+  if (url.pathname === '/garmin/disconnect' && request.method === 'POST') return disconnectUser(env, user.id);
+  if (url.pathname === '/garmin/claim' && request.method === 'POST') return claim(env, user, body);
+  if ((url.pathname === '/garmin/inbox' || url.pathname === '/garmin/sync') && request.method === 'POST') return inbox(env, user);
   fail('找不到', 404);
 }
