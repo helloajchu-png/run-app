@@ -31,7 +31,7 @@
         <path fill="url(#boltAuth)" d="M28 2 12 26h12L16 46l22-28H24L32 2z"/>
       </svg>
       <div>
-        <p class="kicker">SUB-4</p>
+        <p class="kicker">RUN</p>
         <h1>跑步教練</h1>
       </div>
     </div>
@@ -49,6 +49,47 @@
     <p class="fineprint"><a class="textlink" href="privacy.html">隱私權政策</a></p>
   </div>
 </div>
+<div id="goalGate">
+  <div class="auth-card">
+    <p class="kicker">GOAL</p>
+    <h2>你的目標</h2>
+    <p class="auth-lead">每個人的課表不一樣。選你要練的距離，時間和日期可以先空白。</p>
+    <form id="goalForm">
+      <label>想跑什麼
+        <select data-goal="distance">
+          <option value="5k">5K</option>
+          <option value="10k">10K</option>
+          <option value="half" selected>半馬 21.1K</option>
+          <option value="marathon">全馬 42.2K</option>
+          <option value="health">先為了健康跑，不比賽</option>
+        </select>
+      </label>
+      <div id="goalRaceFields">
+        <label>目標完賽時間（選填）<input data-goal="target" placeholder="例如 1:45:00" inputmode="numeric"></label>
+        <label>比賽日期（選填）<input data-goal="date" type="date"></label>
+      </div>
+      <label>目前配速，每公里（選填）<input data-goal="pace" placeholder="例如 6:00" inputmode="numeric"></label>
+      <label>每週跑幾天
+        <select data-goal="days">
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+        </select>
+      </label>
+      <label>程度
+        <select data-goal="level">
+          <option value="beginner">入門</option>
+          <option value="intermediate" selected>有基礎</option>
+        </select>
+      </label>
+      <p id="goalMsg" class="chat-status" role="status"></p>
+      <button type="submit" id="goalSave">用這個目標</button>
+      <button type="button" id="goalSkip" class="ghost">先以健康跑，之後再改</button>
+    </form>
+  </div>
+</div>
 <header class="hero slim">
   <div class="hero-inner">
     <div class="brand">
@@ -62,7 +103,7 @@
         <path fill="url(#bolt)" d="M28 2 12 26h12L16 46l22-28H24L32 2z"/>
       </svg>
       <div>
-        <p class="kicker">SUB-4</p>
+        <p class="kicker">RUN</p>
         <h1>跑步教練</h1>
         <p id="whoami" class="whoami"></p>
       </div>
@@ -111,11 +152,11 @@
  <div class="stat-board">
   <article class="stat stat-mara">
    <div>
-    <p class="stat-label">預測全馬</p>
+    <p class="stat-label" id="heroRaceLabel">預測成績</p>
     <p class="stat-num" id="heroMara">—</p>
-    <p class="stat-sub">目標 SUB-4 · 42.195 km</p>
+    <p class="stat-sub" id="heroRaceSub">先設定你的目標</p>
    </div>
-   <div class="ring-wrap" aria-label="SUB-4 進度">
+   <div class="ring-wrap" aria-label="目標進度">
     <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
      <defs>
       <linearGradient id="ringFire" x1="0" y1="1" x2="1" y2="0">
@@ -126,12 +167,12 @@
      <circle class="ring-track" cx="60" cy="60" r="46"/>
      <circle id="heroRingArc" class="ring-val" cx="60" cy="60" r="46"/>
     </svg>
-    <div class="ring-label"><b id="heroPct">0%</b><span>SUB-4</span></div>
+    <div class="ring-label"><b id="heroPct">0%</b><span id="heroRingName">目標</span></div>
    </div>
   </article>
   <article class="stat stat-wide">
    <div class="gap-row">
-    <p class="stat-label" id="heroGapLabel">距 SUB-4</p>
+    <p class="stat-label" id="heroGapLabel">距目標</p>
     <p class="stat-mid" id="heroGap">—</p>
    </div>
    <div class="bar" aria-hidden="true"><span id="heroBar"></span></div>
@@ -183,8 +224,8 @@
   <p class="kicker">RESULT</p>
   <h2>近期比賽成績</h2>
   <div class="row">
-   <select id="raceDist"><option value="5">5K</option><option value="10">10K</option><option value="21.0975">半馬</option><option value="42.195" selected>全馬</option></select>
-   <input id="raceTime" placeholder="4:03:00">
+   <select id="raceDist"><option value="5">5K</option><option value="10">10K</option><option value="21.0975">半馬</option><option value="42.195">全馬</option></select>
+   <input id="raceTime" placeholder="例如 25:00">
    <input type="date" id="raceDate">
   </div>
   <button id="saveRace">儲存比賽成績</button>
@@ -198,12 +239,9 @@
 <section id="plan" class="tab">
  <div class="card">
   <p class="kicker">TARGET</p>
-  <h2>目標賽事</h2>
-  <label>距離<select id="gDist"><option value="5">5K</option><option value="10">10K</option><option value="21.0975">半馬</option><option value="42.195" selected>全馬</option></select></label>
-  <label>比賽日期<input type="date" id="gDate"></label>
-  <label>目標時間<input id="gTime" placeholder="3:59:00"></label>
-  <label>每週跑步天數<select id="gDays"><option>3</option><option>4</option><option selected>5</option><option>6</option></select></label>
-  <button id="genPlan">產生課表</button>
+  <h2>目標</h2>
+  <p class="muted" id="goalBlurb">課表、配速和首頁進度都跟著這個目標走。</p>
+  <button type="button" id="editGoal">修改目標</button>
  </div>
  <div id="planOut"></div>
 </section>

@@ -1,4 +1,4 @@
-const C='run-app-v15',A=['./','index.html','style.css','app.js','auth.js','handoff.js','community.js','garmin-import.js','garmin-connect.js','garmin-brand.png','manifest.json','icon-192.png','icon-512.png','privacy.html','privacy/index.html'];
+const C='run-app-v16',A=['./','index.html','style.css','app.js','auth.js','handoff.js','community.js','garmin-import.js','garmin-connect.js','garmin-brand.png','manifest.json','icon-192.png','icon-512.png','privacy.html','privacy/index.html'];
 const EXTRA=['favicon-32.png','icon-180.png','icon-maskable-512.png'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil((async()=>{
  const cache=await caches.open(C);

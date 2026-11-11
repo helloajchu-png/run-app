@@ -472,6 +472,19 @@ body.legal{padding-bottom:32px}
 body.locked{padding-bottom:0}
 body.locked .hero,body.locked nav,body.locked main,body.locked .site-foot{display:none}
 #authGate{display:none}
+#goalGate{display:none}
+body.picking #goalGate{
+  display:block;
+  min-height:100vh;
+  padding:calc(32px + env(safe-area-inset-top)) 18px 48px;
+  background:
+    radial-gradient(120% 55% at 100% 0%, rgba(255,59,0,.2), transparent 52%),
+    repeating-linear-gradient(-22deg, rgba(255,255,255,.018) 0 1px, transparent 1px 12px),
+    var(--bg);
+}
+body.picking .hero,body.picking nav,body.picking main,body.picking .site-foot{display:none}
+body.locked #goalGate{display:none !important}
+#goalGate button{width:100%;margin-top:8px}
 body.locked #authGate{
   display:block;
   min-height:100vh;
