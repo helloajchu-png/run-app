@@ -115,11 +115,13 @@ function weekdayName(iso){const [y,m,d]=iso.split('-').map(Number);return ['週�
 function thisWeek(){const [y,m,d]=today().split('-').map(Number);const dt=new Date(y,m-1,d);const day=dt.getDay();dt.setDate(dt.getDate()+(day===0?-6:1-day));const z=n=>String(n).padStart(2,'0');const names=['週一','週二','週三','週四','週五','週六','週日'];const out=[];for(let i=0;i<7;i++){const x=new Date(dt);x.setDate(dt.getDate()+i);out.push({name:names[i],iso:`${x.getFullYear()}-${z(x.getMonth()+1)}-${z(x.getDate())}`})}return out}
 function checks(){return S.get('checks',{})||{}}
 function renderPlan(){const stored=goalProfile;const g=planGoal(stored);if(!g){$('#planOut').innerHTML='<div class="card"><p class="muted">先設定你的目標。可以是 5K、10K、半馬、全馬，或只是為了健康跑。</p></div>';return}
- const p=genPlan(g);const pred=g.fitness?null:vdotTime(p.V,g.dist);const gap=pred==null?0:pred-g.sec;const week=p.out[0];const byName={};
+ const p=genPlan(g);const pred=g.fitness?null:vdotTime(p.V,g.dist);const week=p.out[0];const byName={};
  if(week)week.days.forEach(d=>{byName[d[0]]=d});
  const done=checks();
  const cal=thisWeek().map(day=>{const hit=byName[day.name];const text=hit?`${TAG[hit[1]][0]} · ${hit[2]} · ${fmtP(hit[3])}`:'休息或交叉訓練';const on=!!done[day.iso];return `<label class="calday${day.iso===today()?' is-today':''}${on?' is-done':''}"><input type="checkbox" data-iso="${day.iso}"${on?' checked':''}><span class="calwhen">${day.name}<b>${day.iso.slice(5)}</b></span><span class="calwhat">${esc(text)}</span></label>`}).join('');
- const summary=g.fitness?`這是 ${p.weeks} 週的健康跑，沒有比賽日。配速依你目前的跑力（VDOT ${p.V.toFixed(1)}）。`:stored.targetSec?`距離比賽 <b>${p.weeks}</b> 週。目前預測 ${fmtT(pred)}（VDOT ${p.V.toFixed(1)}），目標 ${fmtT(stored.targetSec)}。${gap>0?`<br>還差約 ${fmtT(gap)}，${p.gV-p.V>3?'目標偏積極，建議穩定累積里程。':'持續訓練有機會達成！'}`:'<br>目前體能已達目標，維持即可。'}`:`還沒填目標完賽時間，這 ${p.weeks} 週依目前配速安排（VDOT ${p.V.toFixed(1)}）。預測 ${goalName(stored)} ${fmtT(pred)}。`;
+ const stand=stored.targetSec&&pred!=null?goalStanding(pred,stored.targetSec):null;
+ const gapNote=!stand?'':stand.status==='behind'?`<br>${stand.label} ${stand.clock}。還沒到，${p.gV-p.V>3?'目標偏積極，建議穩定累積里程。':'持續訓練有機會達成。'}`:stand.status==='even'?'<br>剛好達標，維持即可。':`<br>${stand.label} ${stand.clock}。目前已超過目標，維持即可。`;
+ const summary=g.fitness?`這是 ${p.weeks} 週的健康跑，沒有比賽日。配速依你目前的跑力（VDOT ${p.V.toFixed(1)}）。`:stored.targetSec?`距離比賽 <b>${p.weeks}</b> 週。目前預測 ${fmtT(pred)}（VDOT ${p.V.toFixed(1)}），目標 ${fmtT(stored.targetSec)}。${gapNote}`:`還沒填目標完賽時間，這 ${p.weeks} 週依目前配速安排（VDOT ${p.V.toFixed(1)}）。預測 ${goalName(stored)} ${fmtT(pred)}。`;
  $('#planOut').innerHTML=`<div class="card"><p class="kicker">THIS WEEK</p><h2>本週</h2><div class="weekcal">${cal}</div></div><div class="card"><p>${summary}</p>
  <table><tr><td>輕鬆 / 長跑</td><td>${fmtP(p.P.E)}</td></tr><tr><td>目標配速</td><td>${fmtP(p.P.G)}</td></tr><tr><td>節奏 T</td><td>${fmtP(p.P.T)}</td></tr><tr><td>間歇 I</td><td>${fmtP(p.P.I)}</td></tr></table></div>`+
  p.out.slice(1).map(w=>`<div class="card wk"><h3>第 ${w.w} 週・${w.phase}・約 ${w.km} km</h3>${w.days.map(d=>`<div>${d[0]}　<span class="tag ${TAG[d[1]][1]}">${TAG[d[1]][0]}</span> ${esc(d[2])}　<span class="muted">${fmtP(d[3])}</span></div>`).join('')}<div class="muted">其餘日休息或交叉訓練</div></div>`).join('');
@@ -142,8 +144,9 @@ function coachTips(){const T=[];const add=(c,t)=>T.push({c,t});
   else if(easyish.length>=3)add('good','輕鬆跑配速控制得不錯，維持這個節奏。');
   const profileGoal=planGoal(goalProfile);
   if(profileGoal&&!profileGoal.fitness){const pred=vdotTime(V,profileGoal.dist);const hasDate=!!(goalProfile&&goalProfile.raceDate);const wk=hasDate?Math.ceil((Date.parse(goalProfile.raceDate)-Date.parse(today()))/(7*864e5)):0;
-   const targetBit=goalProfile.targetSec?fmtT(goalProfile.targetSec):'依目前配速';
-   add(!goalProfile.targetSec||pred<=goalProfile.targetSec?'good':'',`目標 ${goalName(goalProfile)} ${targetBit}：目前預測 ${fmtT(pred)}${goalProfile.targetSec?(pred<=goalProfile.targetSec?'，已在目標範圍內！':'，還差 '+fmtT(pred-goalProfile.targetSec)):''}${hasDate?'，剩 '+wk+' 週。':'。'}`);
+   const stand=goalProfile.targetSec?goalStanding(pred,goalProfile.targetSec):null;
+   const versus=stand?(stand.status==='even'?stand.label:stand.label+' '+stand.clock):'依目前配速';
+   add(stand&&stand.status==='behind'?'':'good',`目標 ${goalName(goalProfile)} ${goalProfile.targetSec?fmtT(goalProfile.targetSec):'依目前配速'}：目前預測 ${fmtT(pred)}，${versus}${hasDate?'，剩 '+wk+' 週。':'。'}`);
    const longNeed={marathon:goalProfile.level==='beginner'?24:28,half:goalProfile.level==='beginner'?14:18,'10k':12,'5k':8}[goalProfile.distance];
    const weekNeed={marathon:goalProfile.level==='beginner'?35:50,half:goalProfile.level==='beginner'?25:35,'10k':25,'5k':20}[goalProfile.distance];
    if(longNeed){const lr=Math.max(0,...runs.filter(r=>daysAgo(r.date)<=28).map(r=>r.distanceKm));if(lr<longNeed)add('warn',`近 4 週最長只跑 ${lr.toFixed(1)} km，${goalName(goalProfile)} 備賽可以逐步拉到約 ${longNeed} km 長跑。`);
@@ -168,10 +171,11 @@ function coachContext(){
  const b=bestEffort();
  let fitness=null;
  if(b){const V=b.v;fitness={basis:b.label,vdot:+V.toFixed(1),predictions:[5,10,21.0975,42.195].map(d=>({dist:DN[d],riegel:fmtT(riegel(b.sec,b.km,d)),vdot:fmtT(vdotTime(V,d)),pace:fmtP(riegel(b.sec,b.km,d)/d)})),paces:{easy:fmtP(paceAt(V,.70)),tempo:fmtP(paceAt(V,.88)),interval:fmtP(paceAt(V,.975)),marathon:fmtP(vdotTime(V,42.195)/42.195)}}}
- let plan=null;
- if(goal&&goal.date){const p=genPlan(goal),pred=goal.fitness?null:vdotTime(p.V,goal.dist);
+ let plan=null,pred=null;
+ if(goal&&goal.date){const p=genPlan(goal);pred=goal.fitness?null:vdotTime(p.V,goal.dist);
   plan={goal:{dist:goal.label||DN[goal.dist]||goal.dist,date:goalProfile&&goalProfile.raceDate||'',time:goalProfile&&goalProfile.targetSec?fmtT(goalProfile.targetSec):'依目前配速',days:+goal.days,fitness:!!goal.fitness},weeksOut:p.weeks,predicted:pred?fmtT(pred):null,vdotNow:+p.V.toFixed(1),vdotNeeded:+p.gV.toFixed(1),paces:{easy:fmtP(p.P.E),goal:fmtP(p.P.G),tempo:fmtP(p.P.T),interval:fmtP(p.P.I)},weeks:p.out.map(w=>({week:w.w,phase:w.phase,km:w.km,days:w.days.map(d=>d[0]+' '+TAG[d[1]][0]+' '+d[2]+' '+fmtP(d[3]))}))}}
- const profile=goalProfile?{distance:goalProfile.distance,label:goalName(goalProfile),targetTime:goalProfile.targetSec?fmtT(goalProfile.targetSec):null,raceDate:goalProfile.raceDate||null,currentPace:goalProfile.paceSec?fmtP(goalProfile.paceSec):null,daysPerWeek:goalProfile.daysPerWeek,level:goalProfile.level==='beginner'?'入門':'有基礎'}:null;
+ const versusTarget=goal&&goalProfile&&goalProfile.targetSec&&pred?goalStanding(pred,goalProfile.targetSec):null;
+ const profile=goalProfile?{distance:goalProfile.distance,label:goalName(goalProfile),targetTime:goalProfile.targetSec?fmtT(goalProfile.targetSec):null,raceDate:goalProfile.raceDate||null,currentPace:goalProfile.paceSec?fmtP(goalProfile.paceSec):null,daysPerWeek:goalProfile.daysPerWeek,level:goalProfile.level==='beginner'?'入門':'有基礎',versusTarget:versusTarget?{status:versusTarget.status,label:versusTarget.label,clock:versusTarget.clock,predictedMinusTargetSec:versusTarget.gap}:null}:null;
  return JSON.stringify({today:today(),weeklyKmRecentToOlder:weeklyKm(4).map(x=>+x.toFixed(1)),garminIncluded:allow,goalProfile:profile,race:race?{dist:DN[race.dist]||race.dist,time:fmtT(race.sec),date:race.date||''}:null,recentRuns:recent,fitness,plan,ruleTips:coachTips().map(t=>t.t)});
  }finally{runs=kept}
 }
@@ -257,7 +261,7 @@ function renderHero(){
  text('#heroWeek',(Math.round(wk*10)/10).toFixed(1));
  const ring=$('#heroRingArc'),bar=$('#heroBar'),gapEl=$('#heroGap');
  const p=goalProfile,km=goalKm(p);
- let pct=0,slogan='今天就出門。熱血不等人。',ahead=false;
+ let pct=0,slogan='今天就出門。熱血不等人。',gapClass='';
  const setRing=name=>{const el=$('#heroRingName');if(el)el.textContent=name;const wrap=$('.ring-wrap');if(wrap)wrap.setAttribute('aria-label',name+' 進度')};
  if(!p){text('#heroRaceLabel','預測成績');text('#heroMara','—');text('#heroRaceSub','先設定你的目標');text('#heroVdot','—');text('#heroGap','—');text('#heroPct','0%');text('#heroGapLabel','距目標');setRing('目標')}
  else if(!km){
@@ -277,17 +281,15 @@ function renderHero(){
   setRing(goalName(p));
   if(!pred){text('#heroMara','—');text('#heroVdot','—');text('#heroGap','—');text('#heroPct','0%');text('#heroGapLabel','距目標')}
   else{
-   const slow=target*1.35,gap=pred-target;
-   pct=Math.max(0,Math.min(100,(slow-pred)/(slow-target)*100));
-   if(pred<=target)pct=100;
-   ahead=gap<=30;
-   text('#heroMara',fmtT(pred));text('#heroVdot',V.toFixed(1));text('#heroGap',fmtT(Math.abs(gap)));text('#heroPct',Math.round(pct)+'%');
-   text('#heroGapLabel',p.targetSec?(ahead?'領先目標':'距目標'):'與配速差');
-   slogan=p.targetSec?(ahead?'目標已在腳下。守住節奏，把它跑完。':gap<8*60?'終點線看得到了。再把配速咬住。':'每一公里都在把目標拉近。'):'課表先跟著你現在的配速走。';
+   const stand=goalStanding(pred,target);
+   pct=stand.pct;gapClass=stand.status;
+   text('#heroMara',fmtT(pred));text('#heroVdot',V.toFixed(1));text('#heroGap',stand.status==='even'?'0:00':stand.clock);text('#heroPct',stand.pct+'%');
+   text('#heroGapLabel',p.targetSec?stand.label:(stand.status==='ahead'?'快於配速':stand.status==='even'?'剛好配速':'慢於配速'));
+   slogan=p.targetSec?stand.slogan:'課表先跟著你現在的配速走。';
   }
  }
  text('#slogan',slogan);
- if(gapEl)gapEl.classList.toggle('ahead',ahead);
+ if(gapEl){gapEl.classList.remove('ahead','behind','even');if(gapClass)gapEl.classList.add(gapClass)}
  const apply=()=>{
   if(ring){ring.style.strokeDasharray=String(C);ring.style.strokeDashoffset=String(C*(1-pct/100))}
   if(bar)bar.style.width=pct+'%';
@@ -296,25 +298,55 @@ function renderHero(){
 }
 function renderAll(){renderLog();renderFit();renderPlan();renderCoach();renderHero();renderToday()}
 renderAll();updPace();
+const DEFAULT_TARGET={'5k':30*60,'10k':60*60,half:2*3600,marathon:4*3600};
+let fillingGoal=false;
 function goalField(name){return document.querySelector('#goalForm [data-goal="'+name+'"]')}
+function addNumOptions(sel,from,to){if(!sel||sel.dataset.ready)return;for(let i=from;i<=to;i++){const o=document.createElement('option');o.value=String(i);o.textContent=String(i).padStart(2,'0');sel.appendChild(o)}sel.dataset.ready='1'}
+function initTimePickers(){addNumOptions(goalField('th'),0,7);addNumOptions(goalField('tm'),0,59);addNumOptions(goalField('ts'),0,59);addNumOptions(goalField('pm'),2,20);addNumOptions(goalField('ps'),0,59)}
+function setTargetPick(sec){
+ const on=goalField('target-set');if(!on)return;
+ const box=document.getElementById('targetPickers');
+ if(!(sec>0)){on.value='0';if(box)box.hidden=true;return}
+ on.value='1';if(box)box.hidden=false;
+ const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=Math.round(sec)%60;
+ goalField('th').value=String(Math.min(7,h));goalField('tm').value=String(m);goalField('ts').value=String(s);
+}
+function setPacePick(sec){
+ const on=goalField('pace-set');if(!on)return;
+ const box=document.getElementById('pacePickers');
+ if(!(sec>0)){on.value='0';if(box)box.hidden=true;return}
+ on.value='1';if(box)box.hidden=false;
+ const m=Math.floor(sec/60),s=Math.round(sec)%60;
+ goalField('pm').value=String(Math.min(20,Math.max(2,m)));goalField('ps').value=String(s);
+}
 function fillGoalForm(){
+ initTimePickers();
  const p=goalProfile||{};
  const dist=goalField('distance');if(!dist)return;
+ fillingGoal=true;
  dist.value=p.distance||'half';
- const target=goalField('target');if(target)target.value=p.targetSec?fmtT(p.targetSec):'';
+ setTargetPick(p.targetSec||(!p.distance?DEFAULT_TARGET[dist.value]:null));
  const date=goalField('date');if(date)date.value=p.raceDate||'';
- const pace=goalField('pace');if(pace)pace.value=p.paceSec?fmtT(p.paceSec):'';
+ setPacePick(p.paceSec||null);
  const days=goalField('days');if(days)days.value=String(p.daysPerWeek||4);
  const level=goalField('level');if(level)level.value=p.level||'intermediate';
  const raceBits=document.getElementById('goalRaceFields');
  if(raceBits)raceBits.hidden=dist.value==='health';
+ fillingGoal=false;
 }
 function readGoalForm(){
  const distance=goalField('distance').value;
- const target=parseT(goalField('target').value);
- const pace=parseT(goalField('pace').value);
  const date=goalField('date').value;
- return {distance,targetSec:target>0?Math.round(target):null,raceDate:/^\d{4}-\d{2}-\d{2}$/.test(date)?date:null,paceSec:pace>0?Math.round(pace):null,daysPerWeek:Number(goalField('days').value),level:goalField('level').value};
+ let targetSec=null,paceSec=null;
+ if(distance!=='health'&&goalField('target-set').value==='1'){
+  targetSec=Number(goalField('th').value)*3600+Number(goalField('tm').value)*60+Number(goalField('ts').value);
+  if(!(targetSec>0))targetSec=null;
+ }
+ if(goalField('pace-set').value==='1'){
+  paceSec=Number(goalField('pm').value)*60+Number(goalField('ps').value);
+  if(!(paceSec>0))paceSec=null;
+ }
+ return {distance,targetSec,raceDate:distance!=='health'&&/^\d{4}-\d{2}-\d{2}$/.test(date)?date:null,paceSec,daysPerWeek:Number(goalField('days').value),level:goalField('level').value};
 }
 function applyGoalProfile(p,opts){
  goalProfile=p||null;
@@ -343,13 +375,23 @@ async function saveGoal(body){
  document.body.classList.remove('picking');
  if(window.scheduleAccountSync)window.scheduleAccountSync();
 }
-const APP_VER='run-app-v16';
+const APP_VER='run-app-v17';
 function showToast(msg){let el=$('#toast');if(!el){el=document.createElement('p');el.id='toast';el.className='toast';document.body.appendChild(el)}el.textContent=msg}
 function noteUpdate(){const prev=localStorage.getItem('ra_sw');const back=!!(prev||navigator.serviceWorker?.controller);if(prev!==APP_VER&&back&&sessionStorage.getItem('ra_toasted')!==APP_VER){sessionStorage.setItem('ra_toasted',APP_VER);showToast('已更新，請再試一次')}localStorage.setItem('ra_sw',APP_VER)}
 if('serviceWorker' in navigator){noteUpdate();navigator.serviceWorker.register('sw.js');navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.version)noteUpdate()});navigator.serviceWorker.addEventListener('controllerchange',noteUpdate)}
 const goalForm=document.getElementById('goalForm');
 if(goalForm){
- goalField('distance').addEventListener('change',()=>{const box=document.getElementById('goalRaceFields');if(box)box.hidden=goalField('distance').value==='health'});
+ initTimePickers();
+ const syncPickers=()=>{
+  const health=goalField('distance').value==='health';
+  const race=document.getElementById('goalRaceFields');if(race)race.hidden=health;
+  const tp=document.getElementById('targetPickers');if(tp)tp.hidden=health||goalField('target-set').value!=='1';
+  const pp=document.getElementById('pacePickers');if(pp)pp.hidden=goalField('pace-set').value!=='1';
+ };
+ goalField('distance').addEventListener('change',()=>{if(!fillingGoal)setTargetPick(DEFAULT_TARGET[goalField('distance').value]||null);syncPickers()});
+ goalField('target-set').addEventListener('change',()=>{if(goalField('target-set').value==='1'&&!(Number(goalField('th').value)||Number(goalField('tm').value)||Number(goalField('ts').value)))setTargetPick(DEFAULT_TARGET[goalField('distance').value]||3600);syncPickers()});
+ goalField('pace-set').addEventListener('change',syncPickers);
+ syncPickers();
  goalForm.addEventListener('submit',async e=>{e.preventDefault();const msg=document.getElementById('goalMsg');msg.textContent='儲存中…';try{await saveGoal(readGoalForm());msg.textContent='已存進這個帳號。'}catch(err){msg.textContent=err.message||'沒有儲存'}});
 }
 const goalSkip=document.getElementById('goalSkip');
