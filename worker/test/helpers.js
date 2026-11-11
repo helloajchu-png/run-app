@@ -34,7 +34,7 @@ function wrapD1(raw) {
 
 export async function createEnv() {
   const raw = new DatabaseSync(':memory:');
-  for (const file of ['schema.sql', 'migrations/001_garmin_activities.sql', 'migrations/002_accounts.sql']) {
+  for (const file of ['schema.sql', 'migrations/001_garmin_activities.sql', 'migrations/002_accounts.sql', 'migrations/003_goal_profiles.sql']) {
     raw.exec(readFileSync(join(root, file), 'utf8'));
   }
   return {

@@ -109,7 +109,7 @@ async function flushSync() {
       const deletedIds = loadDeletes();
       res = await api('/sync', {
         method: 'PUT',
-        body: { runs: window.RA.runs.slice(), deletedIds, settings: window.RA.readSettings() },
+        body: { runs: window.RA.runs.slice(), deletedIds, settings: window.RA.readSettings(), goalProfile: window.RA.goalProfile ? window.RA.goalProfile() : null },
       });
       const sent = new Set(deletedIds);
       saveDeletes(loadDeletes().filter(id => !sent.has(id)));
@@ -117,6 +117,7 @@ async function flushSync() {
     const pendingDeletes = new Set(loadDeletes());
     window.RA.setRuns((res.runs || []).map(asRun).filter(run => !pendingDeletes.has(run.id)));
     window.RA.applySettings(res.settings || {});
+    if (res.goalProfile && window.RA.applyGoalProfile) window.RA.applyGoalProfile(res.goalProfile, { keepOpen: document.body.classList.contains('picking') });
     setSyncStatus('');
   } catch {
     setSyncStatus('還沒同步到帳號，紀錄仍留在這台手機。');
@@ -144,6 +145,7 @@ async function syncFromServer() {
   const deleted = new Set(loadDeletes());
   window.RA.setRuns((data.runs || []).map(asRun).filter(run => !deleted.has(run.id)));
   window.RA.applySettings(data.settings || {});
+  if (window.RA.applyGoalProfile) window.RA.applyGoalProfile(data.goalProfile || null);
   if (current) localStorage.setItem(BOUND_KEY, current.id);
   refreshImportUi();
   if (loadDeletes().length) await flushSync();

@@ -7,11 +7,13 @@ function snapshot() {
   const km = runs.filter(r => window.RA.daysAgo(r.date) < 7 && r.durationSec > 0);
   const dist = km.reduce((s, r) => s + r.distanceKm, 0);
   const sec = km.reduce((s, r) => s + r.durationSec, 0);
+  const p = window.RA.goalProfile && window.RA.goalProfile();
   const g = window.RA.S.get('goal', null);
+  const goalRace = p ? (p.distance === 'health' ? '健康跑' : `${window.RA.goalName(p)}${p.targetSec ? ' ' + window.RA.fmtT(p.targetSec) : ''}`) : (g ? `${window.RA.DN[g.dist] || g.dist + 'km'} ${window.RA.fmtT(g.sec)}` : '');
   return {
     weeklyKm: +dist.toFixed(1),
     avgPace: dist > 0 ? window.RA.fmtP(sec / dist) : '—',
-    goalRace: g ? `${window.RA.DN[g.dist] || g.dist + 'km'} ${window.RA.fmtT(g.sec)}` : '',
+    goalRace,
   };
 }
 function me() { return window.RA_AUTH && window.RA_AUTH.user(); }

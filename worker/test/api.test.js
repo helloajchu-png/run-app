@@ -296,3 +296,64 @@ test('Garmin connection is stored on the account and follows a new login', async
     }
   });
 });
+
+test('goal profile migration only seeds Aj and stays additive', () => {
+  const sql = readFileSync(join(root, 'migrations/003_goal_profiles.sql'), 'utf8');
+  const previous = readFileSync(join(root, 'migrations/002_accounts.sql'), 'utf8');
+  assert.doesNotMatch(sql, /drop\s+table/i);
+  assert.doesNotMatch(sql, /update\s+accounts/i);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS goal_profiles/);
+  assert.match(sql, /helloajchu@gmail.com/);
+  assert.match(sql, /14399/);
+  assert.equal(3 * 3600 + 59 * 60 + 59, 14399);
+  assert.equal(previous.includes('goal_profiles'), false);
+});
+
+test('goal profiles are private and Aj is seeded as a sub-4 marathon', async () => {
+  await withEnv(async env => {
+    const other = await register(env, 'runner@example.com', 'correct-horse', '同事');
+    const aj = await register(env, 'HelloAjchu@gmail.com', 'correct-horse', 'Aj');
+    env.raw.exec(readFileSync(join(root, 'migrations/003_goal_profiles.sql'), 'utf8'));
+
+    const seeded = await call(env, '/goal', { token: aj.token });
+    assert.equal(seeded.status, 200);
+    assert.equal(seeded.data.goalProfile.distance, 'marathon');
+    assert.equal(seeded.data.goalProfile.targetSec, 14399);
+    assert.equal(seeded.data.goalProfile.raceDate, null);
+
+    const empty = await call(env, '/goal', { token: other.token });
+    assert.equal(empty.data.goalProfile, null);
+    const half = await call(env, '/goal', {
+      method: 'PUT', token: other.token,
+      body: { distance: 'half', targetSec: 6300, raceDate: '2026-12-01', paceSec: 330, daysPerWeek: 4, level: 'intermediate' },
+    });
+    assert.equal(half.status, 200);
+    assert.equal(half.data.goalProfile.distance, 'half');
+    assert.equal(half.data.goalProfile.targetSec, 6300);
+
+    const ajAgain = await call(env, '/goal', { token: aj.token });
+    assert.equal(ajAgain.data.goalProfile.distance, 'marathon');
+    assert.equal(ajAgain.data.goalProfile.targetSec, 14399);
+    const ajSync = await call(env, '/sync', { token: aj.token });
+    assert.equal(ajSync.data.goalProfile.distance, 'marathon');
+    assert.equal(JSON.stringify(ajSync.data).includes('6300'), false);
+
+    const health = await call(env, '/goal', {
+      method: 'PUT', token: other.token,
+      body: { distance: 'health', targetSec: 9999, raceDate: '2026-12-01', daysPerWeek: 3, level: 'beginner' },
+    });
+    assert.equal(health.data.goalProfile.distance, 'health');
+    assert.equal(health.data.goalProfile.targetSec, null);
+    assert.equal(health.data.goalProfile.raceDate, null);
+    assert.equal(health.data.goalProfile.level, 'beginner');
+
+    const bad = await call(env, '/goal', { method: 'PUT', token: other.token, body: { distance: 'ultra' } });
+    assert.equal(bad.status, 400);
+
+    await call(env, '/auth/delete-account', { method: 'POST', token: other.token, body: { password: 'correct-horse' } });
+    const left = env.raw.prepare('SELECT distance FROM goal_profiles g JOIN accounts a ON a.id=g.user_id WHERE a.email=?').get('helloajchu@gmail.com');
+    assert.equal(left.distance, 'marathon');
+    const gone = env.raw.prepare('SELECT COUNT(*) AS n FROM goal_profiles WHERE user_id=?').get(other.user.id);
+    assert.equal(gone.n, 0);
+  });
+});

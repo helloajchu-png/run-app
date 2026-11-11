@@ -11,6 +11,7 @@ import {
   verifyPassword,
 } from './passwords.js';
 import { getSettings, listRuns, putSync } from './runs.js';
+import { getGoal, putGoal } from './goal.js';
 
 const DEFAULT_ORIGINS = [
   'https://helloajchu-png.github.io',
@@ -205,6 +206,7 @@ async function removeAccount(request, env, me, body) {
   await env.DB.prepare('DELETE FROM feed_posts WHERE user_id=?').bind(me.id).run();
   await env.DB.prepare('DELETE FROM user_runs WHERE user_id=?').bind(me.id).run();
   await env.DB.prepare('DELETE FROM user_settings WHERE user_id=?').bind(me.id).run();
+  await env.DB.prepare('DELETE FROM goal_profiles WHERE user_id=?').bind(me.id).run();
   await env.DB.prepare('DELETE FROM auth_sessions WHERE user_id=?').bind(me.id).run();
   await env.DB.prepare('DELETE FROM accounts WHERE id=?').bind(me.id).run();
   return { ok: true };
@@ -358,10 +360,21 @@ export default {
       if (url.pathname === '/me' && request.method === 'PUT') return json(request, env, await updateMe(env, me, body));
       if (url.pathname === '/auth/change-password' && request.method === 'POST') return json(request, env, await changePassword(request, env, me, body));
       if (url.pathname === '/auth/delete-account' && request.method === 'POST') return json(request, env, await removeAccount(request, env, me, body));
-      if (url.pathname === '/sync' && request.method === 'GET') {
-        return json(request, env, { runs: await listRuns(env.DB, me.id), settings: await getSettings(env.DB, me.id) });
+      if (url.pathname === '/goal' && request.method === 'GET') {
+        return json(request, env, { goalProfile: await getGoal(env.DB, me.id) });
       }
-      if (url.pathname === '/sync' && request.method === 'PUT') return json(request, env, await putSync(env.DB, me.id, body));
+      if (url.pathname === '/goal' && request.method === 'PUT') {
+        return json(request, env, { goalProfile: await putGoal(env.DB, me.id, body.goalProfile || body) });
+      }
+      if (url.pathname === '/sync' && request.method === 'GET') {
+        return json(request, env, { runs: await listRuns(env.DB, me.id), settings: await getSettings(env.DB, me.id), goalProfile: await getGoal(env.DB, me.id) });
+      }
+      if (url.pathname === '/sync' && request.method === 'PUT') {
+        const saved = await putSync(env.DB, me.id, body);
+        if (body.goalProfile && typeof body.goalProfile === 'object') saved.goalProfile = await putGoal(env.DB, me.id, body.goalProfile);
+        else saved.goalProfile = await getGoal(env.DB, me.id);
+        return json(request, env, saved);
+      }
       if (url.pathname === '/posts' && request.method === 'POST') return json(request, env, await createPost(env, me, body));
       const like = url.pathname.match(/^\/posts\/([^/]+)\/like$/);
       if (like && request.method === 'POST') return json(request, env, await toggleLike(env, me, decodeURIComponent(like[1])));

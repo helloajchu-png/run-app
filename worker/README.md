@@ -16,7 +16,13 @@ D1 `run-app` 的 database_id 是 `00ce5642-5c60-4355-868a-49924791dea9`。
 npx wrangler deploy --keep-vars
 ```
 
-`--keep-vars` 會留下已經在 Cloudflare 上的變數和密鑰。部署後確認 `/health` 的 `auth` 是 `true`。這次沒有資料表變更。
+`--keep-vars` 會留下已經在 Cloudflare 上的變數和密鑰。部署後確認 `/health` 的 `auth` 是 `true`。
+
+目標資料表是新檔，不要用 `wrangler d1 migrations apply`。在 `worker/` 手動執行：
+
+```bash
+npx wrangler d1 execute run-app --remote --file=migrations/003_goal_profiles.sql
+```
 
 本機測試（Node 22，不用安裝套件）：
 
