@@ -65,10 +65,29 @@
         </select>
       </label>
       <div id="goalRaceFields">
-        <label>目標完賽時間（選填）<input data-goal="target" placeholder="例如 1:45:00" inputmode="numeric"></label>
+        <label>目標完賽時間
+          <select data-goal="target-set">
+            <option value="0">不設定</option>
+            <option value="1">設定時間</option>
+          </select>
+        </label>
+        <div id="targetPickers" class="time-picks">
+          <label>小時<select data-goal="th"></select></label>
+          <label>分鐘<select data-goal="tm"></select></label>
+          <label>秒<select data-goal="ts"></select></label>
+        </div>
         <label>比賽日期（選填）<input data-goal="date" type="date"></label>
       </div>
-      <label>目前配速，每公里（選填）<input data-goal="pace" placeholder="例如 6:00" inputmode="numeric"></label>
+      <label>目前配速，每公里
+        <select data-goal="pace-set">
+          <option value="0">不設定</option>
+          <option value="1">設定配速</option>
+        </select>
+      </label>
+      <div id="pacePickers" class="time-picks">
+        <label>分<select data-goal="pm"></select></label>
+        <label>秒<select data-goal="ps"></select></label>
+      </div>
       <label>每週跑幾天
         <select data-goal="days">
           <option value="2">2</option>
@@ -329,6 +348,7 @@
 </section>
 </main>
 <footer class="site-foot"><a href="privacy.html">隱私權政策</a></footer>
+<script src="goal-standing.js"></script>
 <script src="handoff.js"></script>
 <script src="garmin-import.js"></script>
 <script src="app.js"></script>
