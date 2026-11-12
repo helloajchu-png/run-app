@@ -76,6 +76,8 @@ h1{
 @keyframes sheen{to{background-position:-200% 0}}
 
 .stat-board{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cross-line{margin:12px 2px 0;color:var(--muted);font-size:14px}
+.sport{display:inline-block;padding:0 6px;border:1px solid var(--gold);color:var(--gold);font-family:var(--cond);font-size:12px;letter-spacing:.06em}
 .stat{
   position:relative;
   background:

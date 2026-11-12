@@ -2,6 +2,8 @@
 const $=s=>document.querySelector(s);
 const S={get:(k,d)=>{try{return JSON.parse(localStorage.getItem('ra_'+k))??d}catch{return d}},set:(k,v)=>localStorage.setItem('ra_'+k,JSON.stringify(v))};
 let runs=S.get('runs',[]);
+let cross=S.get('cross',[]);
+if(!Array.isArray(cross))cross=[];
 const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
 const parseT=s=>{if(!s)return NaN;const p=String(s).trim().split(':').map(Number);if(p.some(isNaN))return NaN;return p.reduce((a,b)=>a*60+b,0)};
 const fmtT=sec=>{sec=Math.round(sec);const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
@@ -53,7 +55,14 @@ function editRun(id){const r=runs.find(x=>x.id===id);if(!r)return;$('#editId').v
 function delRun(id){if(!confirm('確定刪除這筆紀錄？'))return;if(window.noteAccountDelete)window.noteAccountDelete(id);runs=runs.filter(x=>x.id!==id);save()}
 function renderLog(){runs.sort((a,b)=>b.date.localeCompare(a.date));$('#runCount').textContent=`（${runs.length} 筆）`;
  $('#runList').innerHTML=runs.length?runs.map(r=>`<li><div class="run-body"><div class="run-top"><b>${r.date}</b><span class="run-fig">${r.distanceKm.toFixed(2)}</span><span class="unit">km</span><span class="run-time">${fmtT(r.durationSec)}</span></div><div class="meta">配速 ${fmtP(r.durationSec/r.distanceKm)}${r.avgHr?' · 心率 '+r.avgHr:''}${r.source&&r.source!=='manual'?' <span class="src">GARMIN</span>':''}${r.note?' · '+esc(r.note):''}</div></div><div class="acts"><button class="ghost" data-e="${r.id}">編輯</button><button class="danger" data-d="${r.id}">刪除</button></div></li>`).join(''):'<li class="muted">尚無紀錄</li>';
- $('#runList').querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>editRun(b.dataset.e));$('#runList').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>delRun(b.dataset.d))}
+ $('#runList').querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>editRun(b.dataset.e));$('#runList').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>delRun(b.dataset.d));
+ const mins=weekCrossMinutes();
+ const hero=$('#heroCross');if(hero){hero.hidden=!cross.length;hero.textContent='本週交叉訓練 '+mins+' 分'}
+ const card=$('#crossCard');if(card)card.hidden=!cross.length;
+ const count=$('#crossCount');if(count)count.textContent=cross.length?'本週 '+mins+' 分':'';
+ const list=$('#crossList');if(!list)return;
+ const rows=[...cross].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+ list.innerHTML=rows.map(r=>{const dist=r.distanceKm>0?Number(r.distanceKm).toFixed(2)+' km · ':'';const hr=r.avgHr?' · 心率 '+r.avgHr:'';return `<li><div class="run-body"><div class="run-top"><b>${esc(r.date)}</b><span class="sport">${esc(r.label||'交叉訓練')}</span><span class="run-time">${fmtT(r.durationSec)}</span></div><div class="meta">${dist}交叉訓練${hr}${r.note?' · '+esc(r.note):''}</div></div></li>`}).join('')}
 $('#garminFile').onchange=async e=>{const files=[...e.target.files];if(!files.length)return;$('#importMsg').textContent='解析中…';
  try{const inc=await GarminImport.parseFiles(files);inc.forEach((r,i)=>{r.id='g'+Date.now()+'_'+i;r.note=r.note||''});
   const m=GarminImport.mergeRuns(runs,inc);runs=m.runs;save();
@@ -80,7 +89,8 @@ function renderFit(){const race=S.get('race',null);if(race){$('#raceDist').value
 $('#saveRace').onclick=()=>{const sec=parseT($('#raceTime').value);if(!(sec>0))return alert('請輸入成績，例如 25:00 或 1:45:00');S.set('race',{dist:+$('#raceDist').value,sec,date:$('#raceDate').value});renderAll();if(window.scheduleAccountSync)window.scheduleAccountSync();alert('已儲存')};
 
 // ---------- plan ----------
-function weeklyKm(n=4){const w=[];for(let i=0;i<n;i++)w.push(runs.filter(r=>{const a=daysAgo(r.date);return a>=i*7&&a<i*7+7}).reduce((s,r)=>s+r.distanceKm,0));return w} // w[0]=this week
+function weeklyKm(n=4){const w=[];for(let i=0;i<n;i++)w.push(runs.filter(r=>{const a=daysAgo(r.date);return a>=i*7&&a<i*7+7}).reduce((s,r)=>s+r.distanceKm,0));return w} // w[0]=this week. Cross-training is not included.
+function weekCrossMinutes(){const sec=cross.filter(r=>{const a=daysAgo(r.date);return a>=0&&a<7}).reduce((s,r)=>s+(Number(r.durationSec)||0),0);return Math.round(sec/60)}
 function genPlan(goal){const b=bestEffort();const level=goal.level==='beginner'?'beginner':'intermediate';
  const V=b?b.v:(goal.paceSec?vdot(1,goal.paceSec):vdot(goal.dist,goal.sec));
  const gV=goal.assumed?V:vdot(goal.dist,goal.sec);
@@ -176,7 +186,8 @@ function coachContext(){
   plan={goal:{dist:goal.label||DN[goal.dist]||goal.dist,date:goalProfile&&goalProfile.raceDate||'',time:goalProfile&&goalProfile.targetSec?fmtT(goalProfile.targetSec):'依目前配速',days:+goal.days,fitness:!!goal.fitness},weeksOut:p.weeks,predicted:pred?fmtT(pred):null,vdotNow:+p.V.toFixed(1),vdotNeeded:+p.gV.toFixed(1),paces:{easy:fmtP(p.P.E),goal:fmtP(p.P.G),tempo:fmtP(p.P.T),interval:fmtP(p.P.I)},weeks:p.out.map(w=>({week:w.w,phase:w.phase,km:w.km,days:w.days.map(d=>d[0]+' '+TAG[d[1]][0]+' '+d[2]+' '+fmtP(d[3]))}))}}
  const versusTarget=goal&&goalProfile&&goalProfile.targetSec&&pred?goalStanding(pred,goalProfile.targetSec):null;
  const profile=goalProfile?{distance:goalProfile.distance,label:goalName(goalProfile),targetTime:goalProfile.targetSec?fmtT(goalProfile.targetSec):null,raceDate:goalProfile.raceDate||null,currentPace:goalProfile.paceSec?fmtP(goalProfile.paceSec):null,daysPerWeek:goalProfile.daysPerWeek,level:goalProfile.level==='beginner'?'入門':'有基礎',versusTarget:versusTarget?{status:versusTarget.status,label:versusTarget.label,clock:versusTarget.clock,predictedMinusTargetSec:versusTarget.gap}:null}:null;
- return JSON.stringify({today:today(),weeklyKmRecentToOlder:weeklyKm(4).map(x=>+x.toFixed(1)),garminIncluded:allow,goalProfile:profile,race:race?{dist:DN[race.dist]||race.dist,time:fmtT(race.sec),date:race.date||''}:null,recentRuns:recent,fitness,plan,ruleTips:coachTips().map(t=>t.t)});
+ const recentCross=(allow?cross:[]).filter(r=>daysAgo(r.date)<=84).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,12).map(r=>({date:r.date,type:r.label||r.sport,minutes:Math.round((Number(r.durationSec)||0)/60),distanceKm:r.distanceKm>0?+Number(r.distanceKm).toFixed(2):null,hr:r.avgHr||null}));
+ return JSON.stringify({today:today(),weeklyKmRecentToOlder:weeklyKm(4).map(x=>+x.toFixed(1)),crossTrainingMinutesThisWeek:weekCrossMinutes(),recentCrossTraining:recentCross,garminIncluded:allow,goalProfile:profile,race:race?{dist:DN[race.dist]||race.dist,time:fmtT(race.sec),date:race.date||''}:null,recentRuns:recent,fitness,plan,ruleTips:coachTips().map(t=>t.t)});
  }finally{runs=kept}
 }
 function coachEndpoint(){const v=($('#coachUrl')&&$('#coachUrl').value||S.get('coachUrl','')||'').trim().replace(/\/+$/,'');return v||COACH_API}
@@ -235,8 +246,8 @@ if(sendBtn)sendBtn.addEventListener('click',askCoach);
 $('#saveCoachUrl').onclick=()=>{const v=$('#coachUrl').value.trim();if(v)S.set('coachUrl',v);else localStorage.removeItem('ra_coachUrl');if(window.scheduleAccountSync)window.scheduleAccountSync();alert(v?'已改用自訂網址':'已恢復預設教練')};
 function renderCoach(){$('#tips').innerHTML=coachTips().map(t=>`<div class="tip ${t.c}">${esc(t.t)}</div>`).join('');
  const urlEl=$('#coachUrl');if(urlEl&&document.activeElement!==urlEl)urlEl.value=S.get('coachUrl','')||'';renderChat()}
-$('#exportBtn').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({runs,race:S.get('race'),goal:S.get('goal')},null,1)],{type:'application/json'}));a.download='runs.json';a.click()};
-$('#clearBtn').onclick=()=>{if(!confirm('清除所有訓練資料？帳號裡的紀錄、比賽與目標也會刪掉。'))return;if(window.noteAccountDelete)runs.forEach(r=>window.noteAccountDelete(r.id));['runs','race','goal','checks','blurb'].forEach(k=>localStorage.removeItem('ra_'+k));runs=[];renderAll();if(window.scheduleAccountSync)window.scheduleAccountSync()};
+$('#exportBtn').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({runs,crossTraining:cross,race:S.get('race'),goal:S.get('goal')},null,1)],{type:'application/json'}));a.download='runs.json';a.click()};
+$('#clearBtn').onclick=()=>{if(!confirm('清除所有訓練資料？帳號裡的紀錄、比賽與目標也會刪掉。'))return;if(window.noteAccountDelete)runs.forEach(r=>window.noteAccountDelete(r.id));['runs','race','goal','checks','blurb','cross'].forEach(k=>localStorage.removeItem('ra_'+k));localStorage.setItem('ra_clear_cross','1');runs=[];cross=[];renderAll();if(window.scheduleAccountSync)window.scheduleAccountSync()};
 function goalPhrase(){const p=goalProfile;if(!p)return '我還沒有設定目標';const time=p.targetSec?` ${fmtT(p.targetSec)}`:'';return `我的目標是${goalName(p)}${time}`}
 function todaySession(){const g=planGoal(goalProfile);const name=weekdayName(today());
  if(goalProfile&&goalProfile.raceDate===today())return {title:'比賽',detail:`${goalName(goalProfile)}${goalProfile.targetSec?' 目標 '+fmtT(goalProfile.targetSec):''}`,pace:g?fmtP(g.sec/g.dist):'',rest:false};
@@ -375,7 +386,7 @@ async function saveGoal(body){
  document.body.classList.remove('picking');
  if(window.scheduleAccountSync)window.scheduleAccountSync();
 }
-const APP_VER='run-app-v17';
+const APP_VER='run-app-v18';
 function showToast(msg){let el=$('#toast');if(!el){el=document.createElement('p');el.id='toast';el.className='toast';document.body.appendChild(el)}el.textContent=msg}
 function noteUpdate(){const prev=localStorage.getItem('ra_sw');const back=!!(prev||navigator.serviceWorker?.controller);if(prev!==APP_VER&&back&&sessionStorage.getItem('ra_toasted')!==APP_VER){sessionStorage.setItem('ra_toasted',APP_VER);showToast('已更新，請再試一次')}localStorage.setItem('ra_sw',APP_VER)}
 if('serviceWorker' in navigator){noteUpdate();navigator.serviceWorker.register('sw.js');navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.version)noteUpdate()});navigator.serviceWorker.addEventListener('controllerchange',noteUpdate)}
@@ -399,6 +410,14 @@ if(goalSkip)goalSkip.addEventListener('click',async()=>{const msg=document.getEl
 window.importGarminRuns=function(list){
  const shaped=(list||[]).map(r=>({id:('g'+String(r.activityId||Date.now())+'_'+Math.random().toString(36).slice(2,8)).replace(/[^A-Za-z0-9_-]/g,'').slice(0,80),date:r.date,distanceKm:+r.distanceKm,durationSec:+r.durationSec,avgHr:r.avgHr||null,note:r.note||'',source:'garmin'}));
  const m=GarminImport.mergeRuns(runs,shaped);runs=m.runs;save();return m};
+function rememberCross(list){cross=Array.isArray(list)?list:[];S.set('cross',cross);renderAll()}
+window.importGarminCross=function(list){
+ const shaped=(list||[]).map(r=>({id:String(r.id||('garmin-'+String(r.activityId||''))).replace(/[^A-Za-z0-9_-]/g,'').slice(0,80),date:r.date,sport:r.sport||'',label:r.label||'交叉訓練',durationSec:+r.durationSec||0,distanceKm:r.distanceKm>0?+r.distanceKm:null,avgHr:r.avgHr||null,note:r.note||'',source:'garmin'})).filter(r=>r.id&&r.date&&r.durationSec>0);
+ const byId=new Map(cross.map(item=>[item.id,item]));
+ let added=0;
+ for(const item of shaped){if(!byId.has(item.id))added++;byId.set(item.id,item)}
+ rememberCross([...byId.values()]);
+ return {added}};
 window.RA={
  get runs(){return runs},
  setRuns(next){accountSilent=true;try{runs=Array.isArray(next)?next:[];S.set('runs',runs);renderAll()}finally{accountSilent=false}},
@@ -411,7 +430,8 @@ window.RA={
   if('planBlurb' in s){if(s.planBlurb)S.set('blurb',s.planBlurb);else localStorage.removeItem('ra_blurb');const el=$('#meBlurb');if(el&&document.activeElement!==el)el.value=s.planBlurb||''}
   renderAll();
  }finally{accountSilent=false}},
- clearLocal(){accountSilent=true;try{goalProfile=null;['runs','race','goal','checks','coachUrl','blurb','goal_profile'].forEach(k=>localStorage.removeItem('ra_'+k));runs=[];chat=[];document.body.classList.remove('picking');renderAll()}finally{accountSilent=false}},
+ clearLocal(){accountSilent=true;try{goalProfile=null;['runs','race','goal','checks','coachUrl','blurb','goal_profile','cross'].forEach(k=>localStorage.removeItem('ra_'+k));runs=[];cross=[];chat=[];document.body.classList.remove('picking');renderAll()}finally{accountSilent=false}},
+ setCross(list){accountSilent=true;try{rememberCross(list)}finally{accountSilent=false}},
  applyGoalProfile,goalProfile(){return goalProfile},goalName,
  snapshotLocal(){return{runs:S.get('runs',[])||[],race:S.get('race',null),goal:S.get('goal',null),checks:S.get('checks',{})||{},planBlurb:S.get('blurb','')||''}},
  S,$,fmtP,fmtT,DN,today,daysAgo,weeklyKm};

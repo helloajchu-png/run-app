@@ -107,15 +107,18 @@ async function flushSync() {
     do {
       flushAgain = false;
       const deletedIds = loadDeletes();
+      const clearCrossTraining = localStorage.getItem('ra_clear_cross') === '1';
       res = await api('/sync', {
         method: 'PUT',
-        body: { runs: window.RA.runs.slice(), deletedIds, settings: window.RA.readSettings(), goalProfile: window.RA.goalProfile ? window.RA.goalProfile() : null },
+        body: { runs: window.RA.runs.slice(), deletedIds, settings: window.RA.readSettings(), goalProfile: window.RA.goalProfile ? window.RA.goalProfile() : null, clearCrossTraining },
       });
+      if (clearCrossTraining) localStorage.removeItem('ra_clear_cross');
       const sent = new Set(deletedIds);
       saveDeletes(loadDeletes().filter(id => !sent.has(id)));
     } while (flushAgain);
     const pendingDeletes = new Set(loadDeletes());
     window.RA.setRuns((res.runs || []).map(asRun).filter(run => !pendingDeletes.has(run.id)));
+    if (window.RA.setCross) window.RA.setCross(res.crossTraining || []);
     window.RA.applySettings(res.settings || {});
     if (res.goalProfile && window.RA.applyGoalProfile) window.RA.applyGoalProfile(res.goalProfile, { keepOpen: document.body.classList.contains('picking') });
     setSyncStatus('');
@@ -144,6 +147,7 @@ async function syncFromServer() {
   const data = await api('/sync');
   const deleted = new Set(loadDeletes());
   window.RA.setRuns((data.runs || []).map(asRun).filter(run => !deleted.has(run.id)));
+  if (window.RA.setCross) window.RA.setCross(data.crossTraining || []);
   window.RA.applySettings(data.settings || {});
   if (window.RA.applyGoalProfile) window.RA.applyGoalProfile(data.goalProfile || null);
   if (current) localStorage.setItem(BOUND_KEY, current.id);

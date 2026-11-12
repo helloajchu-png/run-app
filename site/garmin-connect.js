@@ -5,7 +5,7 @@ const CONSENT_KEY = 'ra_garmin_coach_ok';
 function gid(s) { return document.getElementById(s); }
 function setGarminUi(connected) {
   gid('garminState').textContent = connected
-    ? '已連結這個帳號。換手機登入後也會顯示已連結，不用重新授權。連結前的舊活動不會補進。'
+    ? '已連結這個帳號。換手機登入後也會顯示已連結。新的跑步會計入週跑量；騎車、滑步機、划船這類交叉訓練會另外記，不計入公里和配速。連結前的舊活動不會補進。'
     : '尚未連結。連結一次就存在這個帳號，其他裝置登入後也會是已連結。';
   gid('garminLink').hidden = connected;
   gid('garminUnlink').hidden = !connected;
@@ -18,7 +18,11 @@ async function pullInbox() {
   if (!window.importGarminRuns) return;
   const data = await garminPost('/garmin/inbox', {});
   const merged = window.importGarminRuns(data.runs || []);
-  if (merged.added) gid('garminMsg').textContent = `新活動 ${merged.added} 筆已加入紀錄`;
+  const cross = window.importGarminCross ? window.importGarminCross(data.crossTraining || []) : { added: 0 };
+  const bits = [];
+  if (merged.added) bits.push(`新跑步 ${merged.added} 筆`);
+  if (cross.added) bits.push(`交叉訓練 ${cross.added} 筆`);
+  if (bits.length) gid('garminMsg').textContent = bits.join('，') + '已加入紀錄';
 }
 async function refreshGarmin() {
   if (!window.RA_AUTH || !window.RA_AUTH.token()) { setGarminUi(false); return; }
@@ -53,7 +57,7 @@ async function finishGarminReturn() {
   try {
     await garminPost('/garmin/complete', { code, state });
     setGarminUi(true);
-    gid('garminMsg').textContent = '已連結這個帳號。之後的新跑步會進來，其他裝置登入後也看得到連結。';
+    gid('garminMsg').textContent = '已連結這個帳號。之後的新跑步和交叉訓練會進來。交叉訓練不計入週跑量。';
   } catch (err) {
     gid('garminMsg').textContent = err.message;
   }

@@ -199,6 +199,7 @@
   <article class="stat"><p class="stat-label">VDOT</p><p class="stat-mid" id="heroVdot">—</p></article>
   <article class="stat"><p class="stat-label">本週公里</p><p class="stat-mid" id="heroWeek">0.0</p></article>
  </div>
+ <p class="cross-line" id="heroCross" hidden>本週交叉訓練 0 分</p>
  <p class="slogan" id="slogan">今天就出門。熱血不等人。</p>
  <button type="button" id="askToday">問教練關於今天</button>
 </section>
@@ -236,6 +237,11 @@
   <p class="kicker">HISTORY</p>
   <h2>跑步紀錄 <span id="runCount" class="muted"></span></h2>
   <ul id="runList" class="list"></ul>
+ </div>
+ <div class="card card-list" id="crossCard" hidden>
+  <p class="kicker">CROSS</p>
+  <h2>交叉訓練 <span id="crossCount" class="muted"></span></h2>
+  <ul id="crossList" class="list"></ul>
  </div>
 </section>
 <section id="fit" class="tab">

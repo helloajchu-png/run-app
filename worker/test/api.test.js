@@ -259,13 +259,21 @@ test('Garmin connection is stored on the account and follows a new login', async
             {
               userId: 'garmin-user-1', summaryId: 'bike-1', activityType: 'CYCLING', activityName: 'Ride',
               startTimeInSeconds: 1735689600, distanceInMeters: 20000, durationInSeconds: 3600,
+              averageHeartRateInBeatsPerMinute: 128,
+            },
+            {
+              userId: 'garmin-user-1', summaryId: 'yoga-1', activityType: 'YOGA', activityName: 'Yoga',
+              startTimeInSeconds: 1735689600, durationInSeconds: 1800,
             },
           ],
         },
       });
       assert.equal(pushed.status, 200);
       assert.equal(pushed.data.stored, 1);
+      assert.equal(pushed.data.storedCross, 1);
       assert.ok(pushed.data.skipped >= 1);
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM feed_posts').get().n, 0);
+      assert.equal(env.raw.prepare('SELECT SUM(distance_km) AS km FROM user_runs').get().km, 10);
 
       const phone = await call(env, '/auth/login', { method: 'POST', body: { email: 'owner@example.com', password: 'correct-horse' } });
       const status = await call(env, '/garmin/status', { method: 'POST', token: phone.data.token, body: {} });
@@ -278,11 +286,20 @@ test('Garmin connection is stored on the account and follows a new login', async
       assert.equal(inbox.data.runs[0].distanceKm, 10);
       assert.equal(inbox.data.runs[0].date, '2025-01-01');
       assert.equal(inbox.data.runs[0].note, 'Morning Run');
+      assert.equal(inbox.data.crossTraining.length, 1);
+      assert.equal(inbox.data.crossTraining[0].label, '自行車');
+      assert.equal(inbox.data.crossTraining[0].sport, 'cycling');
+      assert.equal(inbox.data.crossTraining[0].distanceKm, 20);
+      assert.equal(inbox.data.crossTraining[0].avgHr, 128);
+      assert.equal(inbox.data.crossTraining[0].id.startsWith('garmin-'), true);
 
       const synced = await call(env, '/sync', { token: phone.data.token });
       assert.equal(synced.data.runs.length, 1);
       assert.equal(synced.data.runs[0].source, 'garmin');
       assert.equal(synced.data.runs[0].note, 'Morning Run');
+      assert.equal(synced.data.crossTraining.length, 1);
+      assert.equal(synced.data.crossTraining[0].label, '自行車');
+      assert.equal(synced.data.runs.some(run => run.note === 'Ride'), false);
 
       const strangerStatus = await call(env, '/garmin/status', { method: 'POST', token: other.token, body: {} });
       assert.equal(strangerStatus.data.connected, false);
@@ -290,11 +307,92 @@ test('Garmin connection is stored on the account and follows a new login', async
       assert.deepEqual(strangerInbox.data.runs, []);
       const strangerSync = await call(env, '/sync', { token: other.token });
       assert.deepEqual(strangerSync.data.runs, []);
+      assert.deepEqual(strangerSync.data.crossTraining, []);
       assert.equal(JSON.stringify(strangerSync.data).includes('Morning Run'), false);
+      assert.equal(JSON.stringify(strangerSync.data).includes('自行車'), false);
     } finally {
       globalThis.fetch = originalFetch;
     }
   });
+});
+
+test('Garmin cardio is stored as cross-training and stays out of running totals', async () => {
+  await withEnv(async env => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response('unused', { status: 500 });
+    try {
+      const owner = await register(env, 'cardio@example.com', 'correct-horse', '阿哲');
+      const other = await register(env, 'nocardio@example.com', 'other-horse', '別人');
+      env.raw.prepare('INSERT INTO garmin_oauth (sid, user_id, garmin_user_id, access_token, updated_at) VALUES (?, ?, ?, ?, ?)')
+        .run('sid-cardio', owner.user.id, 'garmin-cardio', 'token', new Date().toISOString());
+      const now = Math.floor(Date.now() / 1000);
+      const pushed = await call(env, '/garmin/push', {
+        method: 'POST',
+        body: {
+          activities: [
+            { userId: 'garmin-cardio', summaryId: 'cycle-out', activityType: 'CYCLING', activityName: 'Afternoon Ride', startTimeInSeconds: now, durationInSeconds: 5400, distanceInMeters: 25000, averageHeartRateInBeatsPerMinute: 130 },
+            { userId: 'garmin-cardio', summaryId: 'cycle-in', activityType: 'INDOOR_CYCLING', activityName: 'Virtual Ride', startTimeInSeconds: now, durationInSeconds: 2700, distanceInMeters: 12000 },
+            { userId: 'garmin-cardio', summaryId: 'ellip', activityType: 'ELLIPTICAL', activityName: 'Elliptical', startTimeInSeconds: 1735686000, startTimeOffsetInSeconds: 28800, durationInSeconds: 1800 },
+            { userId: 'garmin-cardio', summaryId: 'row', activityType: 'INDOOR_ROWING', activityName: 'Row', startTimeInSeconds: now, durationInSeconds: 1200, distanceInMeters: 3000, averageHeartRateInBeatsPerMinute: 140 },
+            { userId: 'garmin-cardio', summaryId: 'cardio', activityType: 'INDOOR_CARDIO', activityName: 'Cardio', startTimeInSeconds: now, durationInSeconds: 900 },
+            { userId: 'garmin-cardio', summaryId: 'stairs', activityType: 'STAIR_CLIMBING', activityName: 'Stairs', startTimeInSeconds: now, durationInSeconds: 600 },
+            { userId: 'garmin-cardio', summaryId: 'lift', activityType: 'STRENGTH_TRAINING', activityName: 'Strength', startTimeInSeconds: now, durationInSeconds: 2400 },
+            { userId: 'garmin-cardio', summaryId: 'walk', activityType: 'WALKING', activityName: 'Walk', startTimeInSeconds: now, durationInSeconds: 1800, distanceInMeters: 2000 },
+          ],
+        },
+      });
+      assert.equal(pushed.status, 200);
+      assert.equal(pushed.data.stored, 0);
+      assert.equal(pushed.data.storedCross, 6);
+      assert.ok(pushed.data.skipped >= 2);
+      const again = await call(env, '/garmin/push', {
+        method: 'POST',
+        body: { activities: [{ userId: 'garmin-cardio', summaryId: 'cycle-out', activityType: 'CYCLING', activityName: 'Afternoon Ride', startTimeInSeconds: now, durationInSeconds: 5400, distanceInMeters: 25000 }] },
+      });
+      assert.equal(again.data.storedCross, 0);
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM cross_training').get().n, 6);
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM user_runs').get().n, 0);
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM feed_posts').get().n, 0);
+
+      const synced = await call(env, '/sync', { token: owner.token });
+      const byId = Object.fromEntries(synced.data.crossTraining.map(item => [item.id, item]));
+      assert.equal(byId['garmin-cycle-out'].label, '自行車');
+      assert.equal(byId['garmin-cycle-out'].distanceKm, 25);
+      assert.equal(byId['garmin-cycle-out'].avgHr, 130);
+      assert.equal(byId['garmin-cycle-in'].label, '室內自行車');
+      assert.equal(byId['garmin-ellip'].label, '滑步機');
+      assert.equal(byId['garmin-ellip'].distanceKm, null);
+      assert.equal(byId['garmin-ellip'].date, '2025-01-01');
+      assert.equal(byId['garmin-row'].label, '划船');
+      assert.equal(byId['garmin-cardio'].label, '室內有氧');
+      assert.equal(byId['garmin-stairs'].label, '階梯機');
+      assert.equal(synced.data.runs.length, 0);
+
+      await call(env, '/me', { method: 'PUT', token: owner.token, body: { isPublic: true } });
+      const today = new Date().toISOString().slice(0, 10);
+      const feed = await call(env, '/feed?today=' + today, { token: owner.token });
+      const mine = feed.data.athletes.find(person => person.mine);
+      assert.equal(mine.weeklyKm, 0);
+      assert.equal(mine.avgPace, '—');
+
+      const hidden = await call(env, '/sync', { token: other.token });
+      assert.deepEqual(hidden.data.crossTraining, []);
+      const cleared = await call(env, '/sync', { method: 'PUT', token: owner.token, body: { runs: [], clearCrossTraining: true } });
+      assert.deepEqual(cleared.data.crossTraining, []);
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM cross_training WHERE user_id=?').get(owner.user.id).n, 0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test('cross-training migration is additive', () => {
+  const sql = readFileSync(join(root, 'migrations/004_cross_training.sql'), 'utf8');
+  const accounts = readFileSync(join(root, 'migrations/002_accounts.sql'), 'utf8');
+  assert.doesNotMatch(sql, /drop\s+table/i);
+  assert.doesNotMatch(sql, /update\s+accounts/i);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS cross_training/);
+  assert.equal(accounts.includes('cross_training'), false);
 });
 
 test('goal profile migration only seeds Aj and stays additive', () => {
