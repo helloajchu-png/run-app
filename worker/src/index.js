@@ -1,4 +1,4 @@
-import { handleGarmin, disconnectUser } from './garmin.js';
+import { handleGarmin, deregisterRemote } from './garmin.js';
 import {
   PASSWORD_ITERATIONS,
   SESSION_MS,
@@ -190,27 +190,101 @@ async function changePassword(request, env, me, body) {
   return { ok: true };
 }
 
+async function tableNames(db) {
+  const rows = await db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+  return new Set((rows.results || []).map(table => table.name));
+}
+
+// One D1 batch is one transaction: either every row for this user goes, or none of the deletes commit.
+function accountDeletionBatch(db, names, userId) {
+  const has = table => names.has(table);
+  const sql = (query, ...params) => db.prepare(query).bind(...params);
+  const statements = [];
+  const garminIds = `(SELECT garmin_user_id FROM garmin_oauth WHERE user_id=? AND garmin_user_id IS NOT NULL)`;
+  if (has('feed_likes')) statements.push(sql('DELETE FROM feed_likes WHERE user_id=? OR post_id IN (SELECT id FROM feed_posts WHERE user_id=?)', userId, userId));
+  if (has('feed_posts')) statements.push(sql('DELETE FROM feed_posts WHERE user_id=?', userId));
+  if (has('likes')) statements.push(sql(has('posts')
+    ? 'DELETE FROM likes WHERE user_id=? OR post_id IN (SELECT id FROM posts WHERE user_id=?)'
+    : 'DELETE FROM likes WHERE user_id=?', ...(has('posts') ? [userId, userId] : [userId])));
+  if (has('posts')) statements.push(sql('DELETE FROM posts WHERE user_id=?', userId));
+  if (has('friends')) statements.push(sql('DELETE FROM friends WHERE user_id=? OR friend_id=?', userId, userId));
+  if (has('sessions')) statements.push(sql('DELETE FROM sessions WHERE user_id=?', userId));
+  if (has('garmin_activities') && has('garmin_oauth')) statements.push(sql(`DELETE FROM garmin_activities WHERE garmin_user_id IN ${garminIds}`, userId));
+  if (has('cross_training')) {
+    statements.push(has('garmin_oauth')
+      ? sql(`DELETE FROM cross_training WHERE user_id=? OR garmin_user_id IN ${garminIds}`, userId, userId)
+      : sql('DELETE FROM cross_training WHERE user_id=?', userId));
+  }
+  if (has('garmin_oauth')) statements.push(sql('DELETE FROM garmin_oauth WHERE user_id=?', userId));
+  if (has('user_runs')) statements.push(sql('DELETE FROM user_runs WHERE user_id=?', userId));
+  if (has('user_settings')) statements.push(sql('DELETE FROM user_settings WHERE user_id=?', userId));
+  if (has('goal_profiles')) statements.push(sql('DELETE FROM goal_profiles WHERE user_id=?', userId));
+  if (has('auth_sessions')) statements.push(sql('DELETE FROM auth_sessions WHERE user_id=?', userId));
+  if (has('users')) statements.push(sql('DELETE FROM users WHERE id=?', userId));
+  const accountIndex = statements.length;
+  if (has('accounts')) statements.push(sql('DELETE FROM accounts WHERE id=?', userId));
+  return { statements, accountIndex };
+}
+
+async function ownedRowCount(db, names, userId, garminIds) {
+  const checks = [];
+  const add = (present, query, params) => { if (present) checks.push([query, params]); };
+  add(names.has('accounts'), 'SELECT COUNT(*) AS n FROM accounts WHERE id=?', [userId]);
+  add(names.has('auth_sessions'), 'SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id=?', [userId]);
+  add(names.has('user_runs'), 'SELECT COUNT(*) AS n FROM user_runs WHERE user_id=?', [userId]);
+  add(names.has('user_settings'), 'SELECT COUNT(*) AS n FROM user_settings WHERE user_id=?', [userId]);
+  add(names.has('goal_profiles'), 'SELECT COUNT(*) AS n FROM goal_profiles WHERE user_id=?', [userId]);
+  add(names.has('feed_posts'), 'SELECT COUNT(*) AS n FROM feed_posts WHERE user_id=?', [userId]);
+  add(names.has('feed_likes'), 'SELECT COUNT(*) AS n FROM feed_likes WHERE user_id=?', [userId]);
+  add(names.has('cross_training'), 'SELECT COUNT(*) AS n FROM cross_training WHERE user_id=?', [userId]);
+  add(names.has('garmin_oauth'), 'SELECT COUNT(*) AS n FROM garmin_oauth WHERE user_id=?', [userId]);
+  add(names.has('users'), 'SELECT COUNT(*) AS n FROM users WHERE id=?', [userId]);
+  add(names.has('sessions'), 'SELECT COUNT(*) AS n FROM sessions WHERE user_id=?', [userId]);
+  add(names.has('friends'), 'SELECT COUNT(*) AS n FROM friends WHERE user_id=? OR friend_id=?', [userId, userId]);
+  add(names.has('posts'), 'SELECT COUNT(*) AS n FROM posts WHERE user_id=?', [userId]);
+  add(names.has('likes'), 'SELECT COUNT(*) AS n FROM likes WHERE user_id=?', [userId]);
+  let total = 0;
+  for (const [query, params] of checks) {
+    const row = await db.prepare(query).bind(...params).first();
+    total += Number(row && row.n) || 0;
+  }
+  for (const garminUserId of garminIds) {
+    if (names.has('garmin_activities')) {
+      const row = await db.prepare('SELECT COUNT(*) AS n FROM garmin_activities WHERE garmin_user_id=?').bind(garminUserId).first();
+      total += Number(row && row.n) || 0;
+    }
+    if (names.has('cross_training')) {
+      const row = await db.prepare('SELECT COUNT(*) AS n FROM cross_training WHERE garmin_user_id=?').bind(garminUserId).first();
+      total += Number(row && row.n) || 0;
+    }
+  }
+  return total;
+}
+
 async function removeAccount(request, env, me, body) {
   if (!(await rateOk(env, request, 'login', false))) fail('嘗試太多次，請稍後再試', 429);
   const row = await env.DB.prepare('SELECT * FROM accounts WHERE id=?').bind(me.id).first();
-  if (!(await verifyPassword(String(body.password ?? ''), row.password_salt, row.password_hash, Number(row.password_iterations) || PASSWORD_ITERATIONS))) {
+  if (!row || !(await verifyPassword(String(body.password ?? ''), row.password_salt, row.password_hash, Number(row.password_iterations) || PASSWORD_ITERATIONS))) {
     await rateOk(env, request, 'login', true);
     fail('密碼不對', 401);
   }
-  await disconnectUser(env, me.id, { purgeActivities: true });
-  const posts = await env.DB.prepare('SELECT id FROM feed_posts WHERE user_id=?').bind(me.id).all();
-  for (const post of posts.results || []) {
-    await env.DB.prepare('DELETE FROM feed_likes WHERE post_id=?').bind(post.id).run();
+  const userId = row.id;
+  try { await deregisterRemote(env, userId); } catch { /* Garmin can be down; the local batch still runs */ }
+  const names = await tableNames(env.DB);
+  let garminIds = [];
+  if (names.has('garmin_oauth')) {
+    const links = await env.DB.prepare('SELECT garmin_user_id FROM garmin_oauth WHERE user_id=?').bind(userId).all();
+    garminIds = [...new Set((links.results || []).map(link => link.garmin_user_id).filter(Boolean))];
   }
-  await env.DB.prepare('DELETE FROM feed_likes WHERE user_id=?').bind(me.id).run();
-  await env.DB.prepare('DELETE FROM feed_posts WHERE user_id=?').bind(me.id).run();
-  await env.DB.prepare('DELETE FROM user_runs WHERE user_id=?').bind(me.id).run();
-  await env.DB.prepare('DELETE FROM cross_training WHERE user_id=?').bind(me.id).run();
-  await env.DB.prepare('DELETE FROM user_settings WHERE user_id=?').bind(me.id).run();
-  await env.DB.prepare('DELETE FROM goal_profiles WHERE user_id=?').bind(me.id).run();
-  await env.DB.prepare('DELETE FROM auth_sessions WHERE user_id=?').bind(me.id).run();
-  await env.DB.prepare('DELETE FROM accounts WHERE id=?').bind(me.id).run();
-  return { ok: true };
+  const { statements, accountIndex } = accountDeletionBatch(env.DB, names, userId);
+  if (!statements.length || accountIndex < 0) fail('帳號沒有刪除', 500);
+  const results = await env.DB.batch(statements);
+  const accountResult = results && results[accountIndex];
+  if (!accountResult || accountResult.success === false || !(accountResult.meta && accountResult.meta.changes >= 1)) {
+    fail('帳號沒有刪除', 500);
+  }
+  if (await ownedRowCount(env.DB, names, userId, garminIds)) fail('帳號沒有刪除', 500);
+  return { ok: true, deleted: true };
 }
 
 function isoDay(value) {

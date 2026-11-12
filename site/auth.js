@@ -34,6 +34,7 @@ let current = null;
 let signingUp = false;
 let flushing = false;
 let flushAgain = false;
+let deletingAccount = false;
 let syncTimer = null;
 
 function setText(id, text) {
@@ -98,7 +99,18 @@ function refreshImportUi() {
   if (count) count.textContent = has ? `這台手機上有 ${pending.runs.length} 筆還沒放進帳號的跑步。匯入成功之前，不會刪掉它們。` : '';
 }
 
+function syncIdle() {
+  if (!flushing) return Promise.resolve();
+  return new Promise(resolve => {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (!flushing || Date.now() - started > 8000) { clearInterval(timer); resolve(); }
+    }, 30);
+  });
+}
+
 async function flushSync() {
+  if (deletingAccount) return;
   if (!localStorage.getItem(TOKEN_KEY) || !window.RA) return;
   if (flushing) { flushAgain = true; return; }
   flushing = true;
@@ -126,7 +138,7 @@ async function flushSync() {
     setSyncStatus('還沒同步到帳號，紀錄仍留在這台手機。');
   } finally {
     flushing = false;
-    if (flushAgain) scheduleAccountSync();
+    if (flushAgain && !deletingAccount) scheduleAccountSync();
   }
 }
 
@@ -336,14 +348,28 @@ const deleteAccountBtn = authEl('deleteAccount');
 if (deleteAccountBtn) deleteAccountBtn.addEventListener('click', async () => {
   if (!confirm('確定永久刪除這個帳號？雲端紀錄和 Garmin 連結會一起刪掉。')) return;
   setText('deleteMsg', '刪除中…');
+  const token = localStorage.getItem(TOKEN_KEY);
+  const password = authEl('deletePassword').value;
+  deletingAccount = true;
   try {
-    await api('/auth/delete-account', { method: 'POST', body: { password: authEl('deletePassword').value } });
+    await syncIdle();
+    localStorage.removeItem(TOKEN_KEY);
+    const data = await api('/auth/delete-account', {
+      method: 'POST',
+      body: { password },
+      headers: token ? { Authorization: 'Bearer ' + token } : {},
+    });
+    if (!data || data.deleted !== true) throw new Error('沒有刪除');
     localSignOut('帳號已刪除。');
   } catch (err) {
+    if (token && !localStorage.getItem(TOKEN_KEY)) localStorage.setItem(TOKEN_KEY, token);
     setText('deleteMsg', err.message || '沒有刪除');
+  } finally {
+    deletingAccount = false;
   }
 });
 document.addEventListener('visibilitychange', () => {
+  if (deletingAccount) return;
   if (document.visibilityState === 'hidden') flushSync();
 });
 showAuthMode();

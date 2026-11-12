@@ -56,7 +56,7 @@ CORS 預設同時允許：
 - `POST /auth/register`、`POST /auth/login`：電子郵件會轉成小寫。密碼以 PBKDF2-SHA256、100,000 次、每人 16 byte 鹽值雜湊，不存原文。
 - 登入與註冊依 IP 限流（登入 15 分鐘 10 次，註冊 1 小時 5 次）。
 - 工作階段權杖是隨機值，D1 只存 SHA-256。大約 400 天到期。`POST /auth/logout` 刪掉這一個。`POST /auth/change-password` 刪掉其他裝置的工作階段。
-- `POST /auth/delete-account` 要目前密碼。會刪掉該帳號的紀錄、設定、動態、工作階段，以及這個帳號的 Garmin 權杖。
+- `POST /auth/delete-account` 要目前密碼。確認密碼後，用一次 D1 `batch` 刪掉這個帳號在所有資料表的列：`accounts`、`auth_sessions`、`user_runs`、`user_settings`、`goal_profiles`、`cross_training`、`feed_posts`、`feed_likes`、`garmin_oauth`、`garmin_activities`，以及舊的 `users`、`sessions`、`friends`、`posts`、`likes`。批次失敗會整批回滾，而且只有帳號列確實消失才回 `{ deleted: true }`。Garmin 遠端解除登記失敗仍會刪掉本地資料。
 - `GET /sync`、`PUT /sync` 只碰到登入者自己的跑步、比賽、目標、課表勾選、教練網址與下週計畫。跑步以 client id 更新；同一天、距離四捨五入到 0.05 公里視作同一筆。`mode:"merge"` 只補上還沒有的紀錄，不刪舊的。
 - `GET /me`、`PUT /me`：顯示名稱，以及 `isPublic`（預設關閉）。
 - `GET /feed`：未公開的人拿不到別人的動態、週跑量或配速。公開的人只看得到其他 `is_public` 的帳號。關掉公開後，下一次讀取就看不到。

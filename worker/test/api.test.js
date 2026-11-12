@@ -108,6 +108,118 @@ test('logout, password change, and delete revoke access without touching another
   });
 });
 
+test('deleting an account removes every owned row and leaves everyone else', async () => {
+  await withEnv(async env => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => { throw new Error('garmin down'); };
+    try {
+      const owner = await register(env, 'owner@example.com', 'correct-horse', '阿哲');
+      const other = await register(env, 'other@example.com', 'other-horse', '別人');
+      await call(env, '/auth/login', { method: 'POST', body: { email: 'owner@example.com', password: 'correct-horse' } });
+      await call(env, '/sync', {
+        method: 'PUT', token: owner.token,
+        body: {
+          runs: [{ id: 'owner-run', date: '2026-11-12', distanceKm: 6, durationSec: 1800, avgHr: 150, note: 'owner-run' }],
+          settings: { planBlurb: 'owner-plan', coachUrl: 'https://coach.example/owner' },
+        },
+      });
+      await call(env, '/sync', {
+        method: 'PUT', token: other.token,
+        body: {
+          runs: [{ id: 'other-run', date: '2026-11-12', distanceKm: 4, durationSec: 1400, note: 'other-run' }],
+          settings: { planBlurb: 'other-plan' },
+        },
+      });
+      await call(env, '/goal', { method: 'PUT', token: owner.token, body: { distance: '10k', targetSec: 3600, daysPerWeek: 4, level: 'intermediate' } });
+      await call(env, '/goal', { method: 'PUT', token: other.token, body: { distance: '5k', daysPerWeek: 3, level: 'beginner' } });
+      const ownerPost = await call(env, '/posts', { method: 'POST', token: owner.token, body: { kind: 'run', body: 'owner finished', km: 6 } });
+      const otherPost = await call(env, '/posts', { method: 'POST', token: other.token, body: { kind: 'run', body: 'other finished', km: 4 } });
+      assert.equal(ownerPost.status, 200);
+      await call(env, '/posts/' + ownerPost.data.id + '/like', { method: 'POST', token: owner.token });
+      await call(env, '/posts/' + otherPost.data.id + '/like', { method: 'POST', token: other.token });
+      await call(env, '/posts/' + ownerPost.data.id + '/like', { method: 'POST', token: other.token, body: {} });
+
+      const now = new Date().toISOString();
+      const ownerId = owner.user.id;
+      const otherId = other.user.id;
+      const insertUser = env.raw.prepare('INSERT INTO users (id, nickname, pin_hash, pin_salt, display_name, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+      insertUser.run(ownerId, 'legacy-owner', 'hash', 'salt', '阿哲', now);
+      insertUser.run(otherId, 'legacy-other', 'hash', 'salt', '別人', now);
+      insertUser.run('legacy-third', 'legacy-third', 'hash', 'salt', '第三者', now);
+      env.raw.prepare('INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)').run('sess-owner', ownerId, now);
+      env.raw.prepare('INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)').run('sess-other', otherId, now);
+      env.raw.prepare('INSERT INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)').run(ownerId, otherId, now);
+      env.raw.prepare('INSERT INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)').run(otherId, 'legacy-third', now);
+      env.raw.prepare('INSERT INTO posts (id, user_id, kind, body, created_at) VALUES (?, ?, ?, ?, ?)').run('legacy-post-owner', ownerId, 'run', 'old owner', now);
+      env.raw.prepare('INSERT INTO posts (id, user_id, kind, body, created_at) VALUES (?, ?, ?, ?, ?)').run('legacy-post-other', otherId, 'run', 'old other', now);
+      env.raw.prepare('INSERT INTO likes (post_id, user_id, created_at) VALUES (?, ?, ?)').run('legacy-post-owner', otherId, now);
+      env.raw.prepare('INSERT INTO likes (post_id, user_id, created_at) VALUES (?, ?, ?)').run('legacy-post-other', ownerId, now);
+      env.raw.prepare('INSERT INTO likes (post_id, user_id, created_at) VALUES (?, ?, ?)').run('legacy-post-other', otherId, now);
+      env.raw.prepare(`INSERT INTO garmin_oauth (sid, user_id, garmin_user_id, access_token, expires_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run('sid-owner', ownerId, 'garmin-owner', 'stale-token', '2099-01-01T00:00:00.000Z', now);
+      env.raw.prepare(`INSERT INTO garmin_oauth (sid, user_id, garmin_user_id, access_token, expires_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run('sid-other', otherId, 'garmin-other', 'other-token', '2099-01-01T00:00:00.000Z', now);
+      env.raw.prepare(`INSERT INTO garmin_activities (id, garmin_user_id, summary_id, activity_date, distance_km, duration_sec, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('act-owner', 'garmin-owner', 'sum-owner', '2026-11-12', 6, 1800, now);
+      env.raw.prepare(`INSERT INTO garmin_activities (id, garmin_user_id, summary_id, activity_date, distance_km, duration_sec, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('act-other', 'garmin-other', 'sum-other', '2026-11-12', 4, 1400, now);
+      const cross = env.raw.prepare(`INSERT INTO cross_training (id, user_id, garmin_user_id, client_id, summary_id, activity_date, sport, label, duration_sec, distance_km, avg_hr, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      cross.run('cross-owner', ownerId, 'garmin-owner', 'garmin-cross-owner', 'cross-owner', '2026-11-12', 'cycling', '自行車', 2400, 20, 130, 'ride', now);
+      cross.run('cross-orphan', null, 'garmin-owner', 'garmin-cross-orphan', 'cross-orphan', '2026-11-11', 'elliptical', '滑步機', 900, null, null, '', now);
+      cross.run('cross-other', otherId, 'garmin-other', 'garmin-cross-other', 'cross-other', '2026-11-12', 'rowing', '划船', 1200, 3, 140, 'row', now);
+      env.raw.prepare('INSERT INTO rate_limits (bucket, hits, reset_at) VALUES (?, ?, ?)').run('login:keep', 1, Date.now() + 60000);
+
+      const owned = () => ({
+        accounts: env.raw.prepare('SELECT COUNT(*) AS n FROM accounts WHERE id=?').get(ownerId).n,
+        sessionsAuth: env.raw.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id=?').get(ownerId).n,
+        runs: env.raw.prepare('SELECT COUNT(*) AS n FROM user_runs WHERE user_id=?').get(ownerId).n,
+        settings: env.raw.prepare('SELECT COUNT(*) AS n FROM user_settings WHERE user_id=?').get(ownerId).n,
+        goals: env.raw.prepare('SELECT COUNT(*) AS n FROM goal_profiles WHERE user_id=?').get(ownerId).n,
+        posts: env.raw.prepare('SELECT COUNT(*) AS n FROM feed_posts WHERE user_id=?').get(ownerId).n,
+        likes: env.raw.prepare('SELECT COUNT(*) AS n FROM feed_likes WHERE user_id=? OR post_id IN (SELECT id FROM feed_posts WHERE user_id=?)').get(ownerId, ownerId).n,
+        cross: env.raw.prepare('SELECT COUNT(*) AS n FROM cross_training WHERE user_id=? OR garmin_user_id=?').get(ownerId, 'garmin-owner').n,
+        oauth: env.raw.prepare('SELECT COUNT(*) AS n FROM garmin_oauth WHERE user_id=?').get(ownerId).n,
+        activities: env.raw.prepare('SELECT COUNT(*) AS n FROM garmin_activities WHERE garmin_user_id=?').get('garmin-owner').n,
+        legacyUser: env.raw.prepare('SELECT COUNT(*) AS n FROM users WHERE id=?').get(ownerId).n,
+        legacySession: env.raw.prepare('SELECT COUNT(*) AS n FROM sessions WHERE user_id=?').get(ownerId).n,
+        legacyFriends: env.raw.prepare('SELECT COUNT(*) AS n FROM friends WHERE user_id=? OR friend_id=?').get(ownerId, ownerId).n,
+        legacyPosts: env.raw.prepare('SELECT COUNT(*) AS n FROM posts WHERE user_id=?').get(ownerId).n,
+        legacyLikes: env.raw.prepare('SELECT COUNT(*) AS n FROM likes WHERE user_id=? OR post_id IN (SELECT id FROM posts WHERE user_id=?)').get(ownerId, ownerId).n,
+      });
+      const before = owned();
+      for (const [key, value] of Object.entries(before)) assert.ok(value >= 1, key + ' should start with a row');
+
+      const wrong = await call(env, '/auth/delete-account', { method: 'POST', token: owner.token, body: { password: 'wrong-password' } });
+      assert.equal(wrong.status, 401);
+      assert.deepEqual(owned(), before);
+
+      const removed = await call(env, '/auth/delete-account', { method: 'POST', token: owner.token, body: { password: 'correct-horse' } });
+      assert.equal(removed.status, 200);
+      assert.equal(removed.data.deleted, true);
+      const after = owned();
+      for (const [key, value] of Object.entries(after)) assert.equal(value, 0, key);
+
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM accounts WHERE id=?').get(otherId).n, 1);
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM user_runs WHERE user_id=?').get(otherId).n, 1);
+      assert.equal(env.raw.prepare('SELECT note FROM user_runs WHERE user_id=?').get(otherId).note, 'other-run');
+      assert.equal(env.raw.prepare('SELECT plan_blurb FROM user_settings WHERE user_id=?').get(otherId).plan_blurb, 'other-plan');
+      assert.equal(env.raw.prepare('SELECT distance FROM goal_profiles WHERE user_id=?').get(otherId).distance, '5k');
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM feed_posts WHERE user_id=?').get(otherId).n, 1);
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM feed_likes WHERE user_id=?').get(otherId).n, 1);
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM cross_training WHERE user_id=?').get(otherId).n, 1);
+      assert.equal(env.raw.prepare('SELECT label FROM cross_training WHERE user_id=?').get(otherId).label, '划船');
+      assert.equal(env.raw.prepare('SELECT garmin_user_id FROM garmin_oauth WHERE user_id=?').get(otherId).garmin_user_id, 'garmin-other');
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM garmin_activities WHERE garmin_user_id=?').get('garmin-other').n, 1);
+      assert.equal(env.raw.prepare('SELECT nickname FROM users WHERE id=?').get(otherId).nickname, 'legacy-other');
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM sessions WHERE user_id=?').get(otherId).n, 1);
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM friends WHERE user_id=? AND friend_id=?').get(otherId, 'legacy-third').n, 1);
+      assert.equal(env.raw.prepare('SELECT body FROM posts WHERE id=?').get('legacy-post-other').body, 'old other');
+      assert.equal(env.raw.prepare('SELECT COUNT(*) AS n FROM likes WHERE post_id=? AND user_id=?').get('legacy-post-other', otherId).n, 1);
+      assert.equal(env.raw.prepare('SELECT hits FROM rate_limits WHERE bucket=?').get('login:keep').hits, 1);
+      assert.equal((await call(env, '/auth/login', { method: 'POST', body: { email: 'owner@example.com', password: 'correct-horse' } })).status, 401);
+      assert.equal((await call(env, '/sync', { token: other.token })).data.runs.length, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
 test('user B cannot read or delete user A runs, and date plus distance dedupes', async () => {
   await withEnv(async env => {
     const a = await register(env, 'a@example.com', 'correct-horse');
