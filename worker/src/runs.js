@@ -87,6 +87,22 @@ export function validateSettings(input) {
   return out;
 }
 
+export async function listCrossTraining(db, userId) {
+  const rows = await db.prepare(`SELECT client_id, activity_date, sport, label, duration_sec, distance_km, avg_hr, note
+    FROM cross_training WHERE user_id=? ORDER BY activity_date DESC, client_id`).bind(userId).all();
+  return (rows.results || []).map(row => ({
+    id: row.client_id,
+    date: row.activity_date,
+    sport: row.sport,
+    label: row.label,
+    durationSec: Number(row.duration_sec),
+    distanceKm: row.distance_km == null ? null : Number(row.distance_km),
+    avgHr: row.avg_hr == null ? null : Number(row.avg_hr),
+    note: row.note || '',
+    source: 'garmin',
+  }));
+}
+
 export async function listRuns(db, userId) {
   const rows = await db.prepare(`SELECT client_id, run_date, distance_km, duration_sec, avg_hr, note, source
     FROM user_runs WHERE user_id=? ORDER BY run_date DESC, client_id`).bind(userId).all();
@@ -208,7 +224,16 @@ export async function putSync(db, userId, body) {
   if (body && body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings)) {
     await putSettings(db, userId, body.settings, mode);
   }
-  return { ok: true, ...counts, runs: await listRuns(db, userId), settings: await getSettings(db, userId) };
+  if (body && body.clearCrossTraining) {
+    await db.prepare('DELETE FROM cross_training WHERE user_id=?').bind(userId).run();
+  }
+  return {
+    ok: true,
+    ...counts,
+    runs: await listRuns(db, userId),
+    crossTraining: await listCrossTraining(db, userId),
+    settings: await getSettings(db, userId),
+  };
 }
 
 export async function mirrorGarminRun(db, userId, run) {

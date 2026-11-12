@@ -82,7 +82,7 @@ OAuth redirect URI 也不要改，Garmin 登記的是（含結尾斜線）：
 
 授權完成後，Garmin 仍把瀏覽器送回這個舊網址，並在 query 帶 `code` 與 `state`。換址用的 GitHub Pages 轉址頁會把這兩個值放進新網站的 fragment，新網站再呼叫 `/garmin/complete`。權杖交換送出的 `redirect_uri` 維持上面這個舊網址，所以 Garmin 開發者後台不用改。若以後要讓 Garmin 直接導回 Pages，必須先在後台新增完全一樣的 `https://run-together.pages.dev/`，才能改程式裡的 `CALLBACK`。
 
-`POST /garmin/push` 不需登入。只留下跑步；有對到帳號時，同時寫進該帳號的 `user_runs`。Starter 是 Push only，不含歷史資料。`callbackURL` 這種 ping 只略過，不會再去拉資料。
+`POST /garmin/push` 不需登入。跑步寫進 `garmin_activities`，有對到帳號時再鏡射到 `user_runs`。騎車（含室內、虛擬）、滑步機、划船、階梯機、室內有氧寫進 `cross_training`，不進 `user_runs`，所以不算週跑量或配速。推送不會建立社群動態。Starter 是 Push only，不含歷史資料，這個 Worker 不會呼叫 backfill。`callbackURL` 這種 ping 只略過，不會再去拉資料。套用新表時用 `wrangler d1 execute run-app --remote --file=migrations/004_cross_training.sql`，不要用 `migrations apply`。
 
 在 Garmin 表單的 OAuth redirect URL 必須一字不差（含結尾斜線）：
 

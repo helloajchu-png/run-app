@@ -104,26 +104,69 @@ function activityTypeKey(activity) {
   return '';
 }
 
-function toRun(activity) {
+function activityText(activity) {
+  return `${activityTypeKey(activity)} ${activity.activityName || ''}`.toLowerCase().replace(/[_-]+/g, ' ');
+}
+
+function looksLikeRun(activity) {
+  const text = activityText(activity);
+  if (/cycl|bik|elliptical|rowing|stair|cardio/.test(text)) return false;
+  return /run|jog|trail|treadmill|track/.test(text);
+}
+
+// Cycling (outdoor, indoor, virtual), elliptical, rowing, and similar cardio.
+// Running stays on the run path. Walking, swimming, and strength are ignored.
+export function cardioSport(activity) {
+  if (looksLikeRun(activity)) return null;
+  const text = activityText(activity);
+  if (/indoor cycl|virtual ride|virtual cycl|spinning|spin class/.test(text)) return { sport: 'indoor_cycling', label: '室內自行車' };
+  if (/cycl|bik|\bride\b/.test(text)) return { sport: 'cycling', label: '自行車' };
+  if (/elliptical/.test(text)) return { sport: 'elliptical', label: '滑步機' };
+  if (/rowing|\brow\b/.test(text)) return { sport: 'rowing', label: '划船' };
+  if (/stair/.test(text)) return { sport: 'stair', label: '階梯機' };
+  if (/jump rope|jumping rope/.test(text)) return { sport: 'cardio', label: '跳繩' };
+  if (/cardio|fitness equipment/.test(text)) return { sport: 'cardio', label: '室內有氧' };
+  return null;
+}
+
+function activityWhen(activity) {
   const start = Number(activity.startTimeInSeconds);
   const offset = Number(activity.startTimeOffsetInSeconds) || 0;
-  const meters = Number(activity.distanceInMeters);
   const sec = Number(activity.durationInSeconds);
-  const kind = `${activityTypeKey(activity)} ${activity.activityName || ''}`;
-  if (!start || !(meters > 0) || !(sec > 0) || !/run|jog|trail|treadmill|track/i.test(kind)) return null;
+  if (!start || !(sec > 0)) return null;
   const local = new Date((start + offset) * 1000);
   const p = n => String(n).padStart(2, '0');
+  const meters = Number(activity.distanceInMeters);
   const hr = Number(activity.averageHeartRateInBeatsPerMinute);
   return {
-    summaryId: String(activity.summaryId || activity.activityId || `${start}|${meters}|${sec}`),
+    summaryId: String(activity.summaryId || activity.activityId || `${start}|${sec}`),
     activityId: activity.activityId || activity.summaryId || null,
     date: `${local.getUTCFullYear()}-${p(local.getUTCMonth() + 1)}-${p(local.getUTCDate())}`,
-    distanceKm: Math.round(meters / 10) / 100,
+    distanceKm: meters > 0 ? Math.round(meters / 10) / 100 : null,
     durationSec: Math.round(sec),
     avgHr: hr > 0 ? Math.round(hr) : null,
     note: activity.activityName ? String(activity.activityName).slice(0, 80) : '',
     source: 'garmin',
   };
+}
+
+function toRun(activity) {
+  if (!looksLikeRun(activity)) return null;
+  const when = activityWhen(activity);
+  if (!when || !(when.distanceKm > 0)) return null;
+  return when;
+}
+
+function toCardio(activity) {
+  const sport = cardioSport(activity);
+  if (!sport) return null;
+  const when = activityWhen(activity);
+  if (!when) return null;
+  return { ...when, sport: sport.sport, label: sport.label };
+}
+
+function garminClientId(summaryId) {
+  return ('garmin-' + String(summaryId || '')).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80);
 }
 
 // userId on push/ping items is stated in Garmin's OAuth2 PKCE PDF.
@@ -137,25 +180,34 @@ export function runsFromPush(body) {
     if (Array.isArray(value)) items.push(...value.filter(item => item && typeof item === 'object'));
   }
   const runs = [];
+  const cross = [];
   let ping = 0;
   let skipped = 0;
   for (const item of items) {
     if (item.callbackURL && item.distanceInMeters == null && item.durationInSeconds == null) { ping++; continue; }
     if (!item.userId) { skipped++; continue; }
     const run = toRun(item);
-    if (!run) { skipped++; continue; }
-    runs.push({ userId: String(item.userId), ...run });
+    if (run) { runs.push({ userId: String(item.userId), ...run }); continue; }
+    const cardio = toCardio(item);
+    if (cardio) { cross.push({ userId: String(item.userId), ...cardio }); continue; }
+    skipped++;
   }
-  return { runs, ping, skipped, received: items.length };
+  return { runs, cross, ping, skipped, received: items.length };
+}
+
+async function garminOwner(db, garminUserId) {
+  const mapped = await db.prepare('SELECT user_id FROM garmin_oauth WHERE garmin_user_id=? AND user_id IS NOT NULL LIMIT 1').bind(garminUserId).first();
+  const known = mapped || await db.prepare('SELECT sid FROM garmin_oauth WHERE garmin_user_id=? LIMIT 1').bind(garminUserId).first();
+  return { mapped, known };
 }
 
 async function storePushedRuns(env, parsed) {
   const db = database(env);
   let stored = 0;
+  let storedCross = 0;
   let unmatched = 0;
   for (const run of parsed.runs) {
-    const mapped = await db.prepare('SELECT user_id FROM garmin_oauth WHERE garmin_user_id=? AND user_id IS NOT NULL LIMIT 1').bind(run.userId).first();
-    const known = mapped || await db.prepare('SELECT sid FROM garmin_oauth WHERE garmin_user_id=? LIMIT 1').bind(run.userId).first();
+    const { mapped, known } = await garminOwner(db, run.userId);
     if (!known) { unmatched++; continue; }
     const result = await db.prepare(`INSERT OR IGNORE INTO garmin_activities
       (id, garmin_user_id, summary_id, activity_date, distance_km, duration_sec, avg_hr, note, created_at)
@@ -167,7 +219,35 @@ async function storePushedRuns(env, parsed) {
       try { await mirrorGarminRun(db, mapped.user_id, run); } catch { /* inbox still has the activity */ }
     }
   }
-  return { ok: true, stored, unmatched, ping: parsed.ping, skipped: parsed.skipped, received: parsed.received };
+  for (const item of parsed.cross || []) {
+    const { mapped, known } = await garminOwner(db, item.userId);
+    if (!known) { unmatched++; continue; }
+    const clientId = garminClientId(item.summaryId);
+    if (clientId.length < 8) { unmatched++; continue; }
+    const result = await db.prepare(`INSERT OR IGNORE INTO cross_training
+      (id, user_id, garmin_user_id, client_id, summary_id, activity_date, sport, label, duration_sec, distance_km, avg_hr, note, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+      crypto.randomUUID(),
+      mapped && mapped.user_id ? mapped.user_id : null,
+      item.userId,
+      clientId,
+      item.summaryId,
+      item.date,
+      item.sport,
+      item.label,
+      item.durationSec,
+      item.distanceKm,
+      item.avgHr,
+      item.note,
+      new Date().toISOString()
+    ).run();
+    if (result && result.meta && result.meta.changes) storedCross++;
+    if (mapped && mapped.user_id) {
+      await db.prepare('UPDATE cross_training SET user_id=? WHERE garmin_user_id=? AND summary_id=? AND user_id IS NULL')
+        .bind(mapped.user_id, item.userId, item.summaryId).run();
+    }
+  }
+  return { ok: true, stored, storedCross, unmatched, ping: parsed.ping, skipped: parsed.skipped, received: parsed.received };
 }
 
 async function accountLink(env, userId) {
@@ -181,16 +261,34 @@ async function linkStatus(env, user) {
   return { connected: !!(row && row.access_token) };
 }
 
+function mapCrossRow(row) {
+  return {
+    id: row.client_id,
+    activityId: row.summary_id,
+    date: row.activity_date,
+    sport: row.sport,
+    label: row.label,
+    durationSec: Number(row.duration_sec),
+    distanceKm: row.distance_km == null ? null : Number(row.distance_km),
+    avgHr: row.avg_hr == null ? null : Number(row.avg_hr),
+    note: row.note || '',
+    source: 'garmin',
+  };
+}
+
 async function inbox(env, user) {
   const row = await accountLink(env, user.id);
-  if (!row) return { connected: false, runs: [] };
-  if (!row.garmin_user_id) return { connected: true, runs: [] };
-  const rows = await database(env).prepare(`SELECT summary_id, activity_date, distance_km, duration_sec, avg_hr, note
+  if (!row) return { connected: false, runs: [], crossTraining: [] };
+  if (!row.garmin_user_id) return { connected: true, runs: [], crossTraining: [] };
+  const db = database(env);
+  const rows = await db.prepare(`SELECT summary_id, activity_date, distance_km, duration_sec, avg_hr, note
     FROM garmin_activities WHERE garmin_user_id=? ORDER BY activity_date DESC LIMIT 100`).bind(row.garmin_user_id).all();
   const runs = (rows.results || []).map(r => ({
     activityId: r.summary_id, date: r.activity_date, distanceKm: r.distance_km, durationSec: r.duration_sec, avgHr: r.avg_hr, note: r.note || '', source: 'garmin',
   }));
-  return { connected: true, runs };
+  const crossRows = await db.prepare(`SELECT client_id, summary_id, activity_date, sport, label, duration_sec, distance_km, avg_hr, note
+    FROM cross_training WHERE garmin_user_id=? ORDER BY activity_date DESC LIMIT 100`).bind(row.garmin_user_id).all();
+  return { connected: true, runs, crossTraining: (crossRows.results || []).map(mapCrossRow) };
 }
 
 async function beginLink(env, user) {
@@ -257,6 +355,7 @@ export async function disconnectUser(env, userId, { purgeActivities = false } = 
   if (purgeActivities) {
     for (const garminUserId of garminIds) {
       await db.prepare('DELETE FROM garmin_activities WHERE garmin_user_id=?').bind(garminUserId).run();
+      await db.prepare('DELETE FROM cross_training WHERE garmin_user_id=?').bind(garminUserId).run();
     }
   }
   return { connected: false };

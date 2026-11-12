@@ -10,7 +10,7 @@ import {
   randomToken,
   verifyPassword,
 } from './passwords.js';
-import { getSettings, listRuns, putSync } from './runs.js';
+import { getSettings, listCrossTraining, listRuns, putSync } from './runs.js';
 import { getGoal, putGoal } from './goal.js';
 
 const DEFAULT_ORIGINS = [
@@ -205,6 +205,7 @@ async function removeAccount(request, env, me, body) {
   await env.DB.prepare('DELETE FROM feed_likes WHERE user_id=?').bind(me.id).run();
   await env.DB.prepare('DELETE FROM feed_posts WHERE user_id=?').bind(me.id).run();
   await env.DB.prepare('DELETE FROM user_runs WHERE user_id=?').bind(me.id).run();
+  await env.DB.prepare('DELETE FROM cross_training WHERE user_id=?').bind(me.id).run();
   await env.DB.prepare('DELETE FROM user_settings WHERE user_id=?').bind(me.id).run();
   await env.DB.prepare('DELETE FROM goal_profiles WHERE user_id=?').bind(me.id).run();
   await env.DB.prepare('DELETE FROM auth_sessions WHERE user_id=?').bind(me.id).run();
@@ -367,7 +368,7 @@ export default {
         return json(request, env, { goalProfile: await putGoal(env.DB, me.id, body.goalProfile || body) });
       }
       if (url.pathname === '/sync' && request.method === 'GET') {
-        return json(request, env, { runs: await listRuns(env.DB, me.id), settings: await getSettings(env.DB, me.id), goalProfile: await getGoal(env.DB, me.id) });
+        return json(request, env, { runs: await listRuns(env.DB, me.id), crossTraining: await listCrossTraining(env.DB, me.id), settings: await getSettings(env.DB, me.id), goalProfile: await getGoal(env.DB, me.id) });
       }
       if (url.pathname === '/sync' && request.method === 'PUT') {
         const saved = await putSync(env.DB, me.id, body);
