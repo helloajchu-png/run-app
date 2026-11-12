@@ -9,7 +9,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 function wrapD1(raw) {
   return {
     prepare(sql) {
-      const build = params => ({
+      const make = params => ({
+        __sql: sql,
+        __params: params,
+        bind(...next) { return make(next); },
         async first() {
           const row = raw.prepare(sql).get(...params);
           return row === undefined ? null : row;
@@ -19,21 +22,34 @@ function wrapD1(raw) {
         },
         async run() {
           const info = raw.prepare(sql).run(...params);
-          return { success: true, meta: { changes: Number(info.changes || 0) } };
+          return { success: true, meta: { changes: Number(info.changes || 0) }, results: [] };
         },
       });
-      return {
-        bind(...params) { return build(params); },
-        first() { return build([]).first(); },
-        all() { return build([]).all(); },
-        run() { return build([]).run(); },
-      };
+      return make([]);
+    },
+    async batch(statements) {
+      if (!Array.isArray(statements) || !statements.length) throw new Error('D1 batch requires statements');
+      raw.exec('BEGIN');
+      try {
+        const results = [];
+        for (const stmt of statements) {
+          if (!stmt || !stmt.__sql) throw new Error('batch statement is missing SQL');
+          const info = raw.prepare(stmt.__sql).run(...(stmt.__params || []));
+          results.push({ success: true, meta: { changes: Number(info.changes || 0) }, results: [] });
+        }
+        raw.exec('COMMIT');
+        return results;
+      } catch (err) {
+        try { raw.exec('ROLLBACK'); } catch { /* the transaction is already closed */ }
+        throw err;
+      }
     },
   };
 }
 
 export async function createEnv() {
   const raw = new DatabaseSync(':memory:');
+  raw.exec('PRAGMA foreign_keys = ON');
   for (const file of ['schema.sql', 'migrations/001_garmin_activities.sql', 'migrations/002_accounts.sql', 'migrations/003_goal_profiles.sql', 'migrations/004_cross_training.sql']) {
     raw.exec(readFileSync(join(root, file), 'utf8'));
   }

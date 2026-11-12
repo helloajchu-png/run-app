@@ -339,17 +339,23 @@ async function finishLink(env, user, body) {
   return { connected: true };
 }
 
-export async function disconnectUser(env, userId, { purgeActivities = false } = {}) {
+export async function deregisterRemote(env, userId) {
   const db = database(env);
   const rows = await db.prepare('SELECT * FROM garmin_oauth WHERE user_id=?').bind(userId).all();
-  const links = rows.results || [];
-  for (const row of links) {
+  for (const row of rows.results || []) {
     if (!row.access_token) continue;
     try {
       const token = await bearer(env, row);
       await fetch(DEREGISTER_URL, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-    } catch { /* still drop the local row */ }
+    } catch { /* local rows are removed even if Garmin is unreachable */ }
   }
+}
+
+export async function disconnectUser(env, userId, { purgeActivities = false } = {}) {
+  const db = database(env);
+  const rows = await db.prepare('SELECT * FROM garmin_oauth WHERE user_id=?').bind(userId).all();
+  const links = rows.results || [];
+  await deregisterRemote(env, userId);
   const garminIds = [...new Set(links.map(row => row.garmin_user_id).filter(Boolean))];
   await db.prepare('DELETE FROM garmin_oauth WHERE user_id=?').bind(userId).run();
   if (purgeActivities) {

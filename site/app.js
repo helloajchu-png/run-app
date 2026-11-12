@@ -386,7 +386,7 @@ async function saveGoal(body){
  document.body.classList.remove('picking');
  if(window.scheduleAccountSync)window.scheduleAccountSync();
 }
-const APP_VER='run-app-v18';
+const APP_VER='run-app-v19';
 function showToast(msg){let el=$('#toast');if(!el){el=document.createElement('p');el.id='toast';el.className='toast';document.body.appendChild(el)}el.textContent=msg}
 function noteUpdate(){const prev=localStorage.getItem('ra_sw');const back=!!(prev||navigator.serviceWorker?.controller);if(prev!==APP_VER&&back&&sessionStorage.getItem('ra_toasted')!==APP_VER){sessionStorage.setItem('ra_toasted',APP_VER);showToast('已更新，請再試一次')}localStorage.setItem('ra_sw',APP_VER)}
 if('serviceWorker' in navigator){noteUpdate();navigator.serviceWorker.register('sw.js');navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.version)noteUpdate()});navigator.serviceWorker.addEventListener('controllerchange',noteUpdate)}
